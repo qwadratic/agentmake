@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0",
+  "timestamp": "2026-07-03T12:00:00Z",
+  "totals": { "done": 7, "total": 12 },
+  "percent": 58.3,
+  "sections": [
+    { "name": "core", "done": 4, "total": 5 },
+    { "name": "docs", "done": 1, "total": 3 },
+    { "name": "tests", "done": 2, "total": 4 }
+  ]
+}

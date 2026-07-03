@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "progress.schema.json",
+  "title": "Progress census output",
+  "type": "object",
+  "required": ["version", "timestamp", "totals", "sections", "percent"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Schema version, semver. Currently 1.0.0."
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "ISO 8601 UTC timestamp of census run, e.g. 2026-07-03T12:00:00Z",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "totals": {
+      "type": "object",
+      "required": ["done", "total"],
+      "additionalProperties": false,
+      "properties": {
+        "done": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "totals.done / totals.total * 100, rounded to 1 decimal; 0 when total is 0"
+    },
+    "sections": {
+      "type": "array",
+      "description": "Per-section counts, order matches human `make progress` output",
+      "items": {
+        "type": "object",
+        "required": ["name", "done", "total"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "done": { "type": "integer", "minimum": 0 },
+          "total": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  }
+}

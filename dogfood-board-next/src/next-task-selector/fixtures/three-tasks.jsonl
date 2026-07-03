@@ -1,0 +1,3 @@
+{"id":"task-1","title":"Fix login redirect","body":"Users land on 404 after login."}
+{"id":"task-2","title":"Add dark mode","body":""}
+{"id":"task-3","title":"Speed up CI","body":"Cache deps."}
