@@ -1,0 +1,7 @@
+{
+  "theme": "midnight",
+  "plugins": ["highlight", "rss"],
+  "title": "site-forge docs",
+  "link": "https://example.invalid/site-forge",
+  "description": "site-forge documenting itself"
+}

@@ -1,0 +1,159 @@
+{
+  "checks": [
+    {
+      "name": "plan-exists",
+      "pass": true,
+      "detail": "build/plan.json parses"
+    },
+    {
+      "name": "plan-schema",
+      "pass": true,
+      "detail": "components[] each have id/desc/deps"
+    },
+    {
+      "name": "dag-valid",
+      "pass": true,
+      "detail": "deps acyclic, all ids resolve"
+    },
+    {
+      "name": "src:cli-scaffold",
+      "pass": true,
+      "detail": "src/cli-scaffold non-empty"
+    },
+    {
+      "name": "checksh:cli-scaffold",
+      "pass": true,
+      "detail": "src/cli-scaffold/check.sh executable"
+    },
+    {
+      "name": "run:cli-scaffold",
+      "pass": true,
+      "detail": "check.sh exit 0"
+    },
+    {
+      "name": "done:cli-scaffold",
+      "pass": true,
+      "detail": "build/cli-scaffold.done present"
+    },
+    {
+      "name": "src:md-core",
+      "pass": true,
+      "detail": "src/md-core non-empty"
+    },
+    {
+      "name": "checksh:md-core",
+      "pass": true,
+      "detail": "src/md-core/check.sh executable"
+    },
+    {
+      "name": "run:md-core",
+      "pass": true,
+      "detail": "check.sh exit 0"
+    },
+    {
+      "name": "done:md-core",
+      "pass": true,
+      "detail": "build/md-core.done present"
+    },
+    {
+      "name": "src:site-assembly",
+      "pass": true,
+      "detail": "src/site-assembly non-empty"
+    },
+    {
+      "name": "checksh:site-assembly",
+      "pass": true,
+      "detail": "src/site-assembly/check.sh executable"
+    },
+    {
+      "name": "run:site-assembly",
+      "pass": true,
+      "detail": "check.sh exit 0"
+    },
+    {
+      "name": "done:site-assembly",
+      "pass": true,
+      "detail": "build/site-assembly.done present"
+    },
+    {
+      "name": "src:plugin-subsystem",
+      "pass": true,
+      "detail": "src/plugin-subsystem non-empty"
+    },
+    {
+      "name": "checksh:plugin-subsystem",
+      "pass": true,
+      "detail": "src/plugin-subsystem/check.sh executable"
+    },
+    {
+      "name": "run:plugin-subsystem",
+      "pass": true,
+      "detail": "check.sh exit 0"
+    },
+    {
+      "name": "done:plugin-subsystem",
+      "pass": true,
+      "detail": "build/plugin-subsystem.done present"
+    },
+    {
+      "name": "src:themes",
+      "pass": true,
+      "detail": "src/themes non-empty"
+    },
+    {
+      "name": "checksh:themes",
+      "pass": true,
+      "detail": "src/themes/check.sh executable"
+    },
+    {
+      "name": "run:themes",
+      "pass": true,
+      "detail": "check.sh exit 0"
+    },
+    {
+      "name": "done:themes",
+      "pass": true,
+      "detail": "build/themes.done present"
+    },
+    {
+      "name": "src:self-demo",
+      "pass": true,
+      "detail": "src/self-demo non-empty"
+    },
+    {
+      "name": "checksh:self-demo",
+      "pass": true,
+      "detail": "src/self-demo/check.sh executable"
+    },
+    {
+      "name": "run:self-demo",
+      "pass": true,
+      "detail": "check.sh exit 0"
+    },
+    {
+      "name": "done:self-demo",
+      "pass": true,
+      "detail": "build/self-demo.done present"
+    },
+    {
+      "name": "subtree:plugin-subsystem",
+      "pass": true,
+      "detail": "24/24 score 1"
+    },
+    {
+      "name": "review-verdict",
+      "pass": true,
+      "detail": "build/report.md has VERDICT: PASS"
+    }
+  ],
+  "passed": 29,
+  "total": 29,
+  "score": 1,
+  "subtrees": {
+    "plugin-subsystem": {
+      "score": 1,
+      "passed": 24,
+      "total": 24
+    }
+  }
+}

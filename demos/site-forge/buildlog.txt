@@ -1,0 +1,134 @@
+../../engine/agent build cli-scaffold
+Done.
+
+- `src/cli-scaffold/forge.py` — argparse `build` subcommand per contract; `load_config` reads optional `site.json`; theme precedence `--theme > site.json > classic`; missing src-dir → stderr + exit 1; `build(src, out, config)` creates out-dir, collects page dicts, returns `{pages, config}` site dict for siblings to extend. Page dict shape documented in module docstring.
+- `src/cli-scaffold/check.sh` — good build (exit 0, out-dir exists), bad src-dir (nonzero + stderr), theme precedence + page-dict assertion, trap cleanup. Passes.
+
+ponytail: `build` only collects pages, no rendering — md-core extends it.
+bash src/cli-scaffold/check.sh
+OK
+touch build/cli-scaffold.done
+../../engine/agent build md-core
+Done. Files under `src/md-core/`:
+
+- **mdcore.py** — parser + renderer. `md_to_html(md) -> (title, body)`: escapes all source via `html.escape` before inline markup (code spans processed first so `**x**` inside backticks stays literal). Fence loop consumes to closing ``` or EOF (unclosed → rest is code). `render_document(title, body, css)` wraps full doc, title/css escaped.
+- **forge.py** — cli-scaffold copy with `build()` extended: per page sets `title` (first h1 else name), `html` body, writes `<name>.html` linking `style.css`.
+- **check.sh** — executable, tmp fixture + trap cleanup. Covers h1-h3, bold, italic, link, inline code, fenced lang + no-lang, list, title, css link, `<script>` escaped + no raw leak, empty file → valid page with filename title, unclosed fence → code, no crash. Passes.
+
+ponytail: paragraph break heuristic uses raw `#`/`- `/``` ``` `` prefixes, not full re-parse — fine for subset; upgrade path is sharing the block matchers if lazy-continuation ever needed.
+bash src/md-core/check.sh
+OK
+touch build/md-core.done
+../../engine/agent build site-assembly
+Done. Files under `src/site-assembly/`:
+
+- **forge.py** — extends md-core build: renders all pages, then assembly stage builds sorted nav entries (`index` first, then content pages by filename), generates `index.html` (index.md body above `<ul class="page-list">`, or "Home" fallback), injects `<nav>` with `class="active"` on current page into every doc. Comment marks the plugin `on_html` hook point (post-nav, pre-write). Returns `{"pages": pages, "config": config}`. `ponytail:` writes placeholder `style.css` so href never dangles; themes component overwrites.
+- **mdcore.py** — copied unchanged from md-core sibling.
+- **check.sh** — 3-page + index.md fixture: index lists all 3, body-above-list assert, per-page nav with all 4 links + exactly one correct active; single-page fixture (no index.md) gets nav + generated index; html.parser link checker over every href in both out-dirs; trap cleanup. Passes.
+bash src/site-assembly/check.sh
+links ok
+links ok
+OK
+touch build/site-assembly.done
+../../engine/subtree plugin-subsystem
+/Applications/Xcode.app/Contents/Developer/usr/bin/make -C src/plugin-subsystem GOAL=goal.md B=build SRC=src AGENTMAKE_DEPTH=1 MAXTIER=$(jq -r .tier build/effort.json) all
+mkdir -p build
+/Users/gerhardgustav/Desktop/hobby-dev/agentmake/engine/agent classify goal.md > build/effort.json
+jq -e '(.tier|IN("vague","standard","prd")) and (.fanout|test("^[0-9]+-[0-9]+$")) and (.review_depth|IN("smoke","standard","full")) and (.model_hint|IN("small","default","large")) and (.thinking|IN("off","low","medium","high"))' build/effort.json > /dev/null   # gate: schema
+/Users/gerhardgustav/Desktop/hobby-dev/agentmake/engine/agent plan goal.md > build/plan.json
+jq -e --argjson maxf 8 '(.components | length > 0 and length <= $maxf) and all(.components[]; (.kind // "leaf") == "leaf" or (.sub_goal | type=="string" and length > 0))' build/plan.json > /dev/null   # gate: valid decomposition; composite ⇒ sub_goal; bounded fanout
+jq -r --arg cap "0" '.components[] | "build/\(.id).done: build/plan.json \(.deps | map("build/\(.).done") | join(" "))\n" + (if (.kind // "leaf") == "composite" and $cap != "1" then "\t$(ENGINE)subtree \(.id)\n\t+$(MAKE) -C src/\(.id) GOAL=goal.md B=build SRC=src AGENTMAKE_DEPTH=2 MAXTIER=$$(jq -r .tier build/effort.json) all\n" else "\t$(AGENT) build \(.id)\n" end) + "\tbash src/\(.id)/check.sh\n\ttouch $@\nCOMPONENTS += build/\(.id).done\n"' build/plan.json > build/components.mk
+/Users/gerhardgustav/Desktop/hobby-dev/agentmake/engine/agent build plugin-loader
+Done. Files under `src/plugin-loader/`:
+
+- `plugin_loader.py` — `load_plugins(config)` imports `config["plugins"]` names via importlib from `plugins/` (dir prepended to `sys.path`, overridable via `plugins_dir` arg for forge.py wiring). `run_on_page` / `run_on_html` / `run_on_site` dispatch in list order, skip missing attrs. Unknown name or raising hook → message with plugin name to stderr, `sys.exit(1)`.
+- `check.sh` — tmp fixture, trap cleanup. Verifies: recorder plugin fires on_page→on_html→on_site in order (cmp log), unknown name exits nonzero with name in stderr, raising plugin exits nonzero with name in stderr, empty plugin list is no-op. Passes, sub-second.
+
+ponytail: `_die` calls `sys.exit` directly — fine for CLI build tool; if forge.py ever wants recoverable errors, upgrade path is raising a `PluginError` instead.
+bash src/plugin-loader/check.sh
+OK
+touch build/plugin-loader.done
+/Users/gerhardgustav/Desktop/hobby-dev/agentmake/engine/agent build hook-contract-docs
+/Users/gerhardgustav/Desktop/hobby-dev/agentmake/engine/agent build highlight-plugin
+Done. Files:
+
+- `src/hook-contract-docs/plugins/README.md` — hook contract: three exact signatures, page dict keys (path/name/title/md/html), site dict keys (pages/config), list-order execution, all-optional rule, error semantics (raise → build fails loudly, name on stderr, nonzero exit). Matches sibling `plugin-loader` behavior.
+- `src/hook-contract-docs/check.sh` — grep-based, fixed-string `grep -qF` per required token, nonzero + names missing token on stderr. No tmp dirs needed (read-only). Passes.
+bash src/hook-contract-docs/check.sh
+OK: hook-contract-docs
+touch build/hook-contract-docs.done
+/Users/gerhardgustav/Desktop/hobby-dev/agentmake/engine/agent build rss-plugin
+Done. Files:
+
+- `src/highlight-plugin/plugins/highlight.py` — `on_html` regex-tokenizes escaped code inside `<pre><code class="lang-X">…</code></pre>` (mdcore's exact output shape, also accepts `language-X`). Python mode: str/com/kw/num via one alternation (leftmost match keeps `#` inside strings and quotes inside comments correct); unknown lang: str+num only; no-class blocks untouched. Strings matched as entities (`&quot;`/`&#x27;`/`&#39;`) so no double-escape — spans inserted, content never re-escaped.
+- `src/highlight-plugin/check.sh` — tmp dir + trap cleanup; drives `on_html` directly on fixture with python/zorblang/untagged blocks; asserts all four tok classes for python, str+num only for unknown, untagged bytes unchanged, no `&amp;quot;`, and html.parser walk proves balanced non-nested spans. Passes.
+
+ponytail: single-line strings only (no triple-quoted / multiline match — `.` without DOTALL caps at line end); upgrade path = add `&quot;&quot;&quot;.*?&quot;&quot;&quot;` alternative with re.S if needed.
+bash src/highlight-plugin/check.sh
+OK
+highlight-plugin check: PASS
+touch build/highlight-plugin.done
+Done. Files:
+
+- `src/rss-plugin/plugins/rss.py` — `on_site(site, out_dir)` writes `feed.xml`. Channel title/link/description from `config` keys of same names. Per-page item: title, `link/name.html`, description = first `<p>` text via `html.parser` (falls back to page title if no para). Built with `xml.etree`, escaping free. No pubDate — fully deterministic.
+- `src/rss-plugin/check.sh` — tmp fixture, 3 pages (incl. entities, nested tags, no-para page), runs `on_site` twice, parses via ElementTree, asserts channel meta + item count + non-empty descriptions + no pubDate, `cmp` byte-identical. Passes.
+bash src/rss-plugin/check.sh
+structure ok
+deterministic ok
+rss-plugin check PASSED
+touch build/rss-plugin.done
+/Users/gerhardgustav/Desktop/hobby-dev/agentmake/engine/agent build subsystem-integration
+Done. Two files under `src/subsystem-integration/`:
+
+- **`forge.py`** — host site-assembly pipeline wired to `plugin_loader`: `run_on_page` pre-render, `run_on_html` on final doc post-nav (content pages + index), `run_on_site` post-build. Same CLI contract.
+- **`check.sh`** — assembles tmp workspace from siblings (`plugin_loader.py`, `plugins/highlight.py`, `plugins/rss.py`, host `mdcore.py`), runs three scenarios:
+  1. both plugins → `class="tok-` in `post.html`, `feed.xml` exists + parses via ElementTree
+  2. `"plugins": []` → zero tok- spans anywhere in out dir, no `feed.xml`
+  3. fixture `boomer.py` raising → nonzero exit, "boomer" in stderr
+
+Verified: passes in 0.7s, passes two concurrent runs (own `mktemp -d`, trap cleanup).
+
+ponytail: mdcore.py located via two hardcoded candidate paths (site-assembly, md-core); if host tree moves, add path to the loop.
+bash src/subsystem-integration/check.sh
+OK
+touch build/subsystem-integration.done
+/Users/gerhardgustav/Desktop/hobby-dev/agentmake/engine/agent review > build/report.md
+grep -q 'VERDICT: PASS' build/report.md
+bash src/plugin-subsystem/check.sh
+touch build/plugin-subsystem.done
+../../engine/agent build themes
+Done. Component `src/themes/`:
+
+**Files**
+- `themes/classic.css` — white bg, dark text, serif headings, warm-red links/nav accent, light tok-* palette
+- `themes/midnight.css` — `#0b0e14` bg, light text, cyan accent links/nav, dark tok-* palette
+- `forge.py` — subsystem-integration forge + theme stage: copies `themes/<theme>.css` → `out/style.css`; unknown theme → stderr + exit 1. Precedence unchanged: `--theme` > site.json > `classic`
+- `mdcore.py`, `plugin_loader.py`, `plugins/highlight.py` — copied from siblings (integration seam)
+- `fixture/` — page.md (h1-h3, list, links, python block), other.md (multi-link nav), site.json enabling highlight
+- `goldens/classic.png`, `goldens/midnight.png` — reviewed, correct
+- `check.sh` — builds both themes into tmp out-dirs, asserts style.css shipped byte-identical + linked + no remote URLs + tok spans present, snap 480x640 + evalshot per theme, trap cleanup
+
+**Verified**: check passes twice, ssim=1.000000 both themes (deterministic); default/site.json/`--theme` resolution + unknown-theme rejection all pass.
+
+No animations, no wall-clock content, no CDN. ponytail: forge.py duplicated from siblings per component isolation — self-demo integrates final copy.
+bash src/themes/check.sh
+evalshot: PASS ssim=1.000000 >= 0.97  (shots/classic.png vs goldens/classic.png)
+evalshot: PASS ssim=1.000000 >= 0.97  (shots/midnight.png vs goldens/midnight.png)
+OK: themes check passed (classic + midnight)
+touch build/themes.done
+../../engine/agent build self-demo
+Done. `src/self-demo/`:
+
+- **docs-src/** — 4 real doc pages (`index.md` what it is, `usage.md` CLI + site.json reference, `plugin-api.md` full hook contract, `themes.md` both themes), each with real code samples; `site.json` enables `["highlight", "rss"]` + `midnight` theme
+- **forge.py / mdcore.py / plugin_loader.py / plugins/ / themes/** — pipeline reused from sibling components (`themes` build of forge + `plugin-subsystem` rss plugin), no rewrites
+- **check.sh** — tmp out-dir with trap cleanup; asserts index.html + ≥4 page htmls, `<nav>` on every page, `tok-` spans, feed.xml parses via `xml.etree` with ≥4 non-empty items, zero dead hrefs (html.parser scan of every href/src)
+
+Check run: `PASS: self-demo`, 4 feed items, no dead links.
+
+ponytail: check greps `tok-` only in plugin-api.html (page guaranteed to have a python fence); site-wide tok scan trivial to add if wanted.
+bash src/self-demo/check.sh
+feed.xml ok (4 items), zero dead hrefs
+PASS: self-demo
+touch build/self-demo.done
+../../engine/agent review > build/report.md
+grep -q 'VERDICT: PASS' build/report.md

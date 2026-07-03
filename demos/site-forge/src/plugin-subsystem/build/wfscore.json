@@ -1,0 +1,127 @@
+{
+  "checks": [
+    {
+      "name": "plan-exists",
+      "pass": true,
+      "detail": "build/plan.json parses"
+    },
+    {
+      "name": "plan-schema",
+      "pass": true,
+      "detail": "components[] each have id/desc/deps"
+    },
+    {
+      "name": "dag-valid",
+      "pass": true,
+      "detail": "deps acyclic, all ids resolve"
+    },
+    {
+      "name": "src:plugin-loader",
+      "pass": true,
+      "detail": "src/plugin-loader non-empty"
+    },
+    {
+      "name": "checksh:plugin-loader",
+      "pass": true,
+      "detail": "src/plugin-loader/check.sh executable"
+    },
+    {
+      "name": "run:plugin-loader",
+      "pass": true,
+      "detail": "check.sh exit 0"
+    },
+    {
+      "name": "done:plugin-loader",
+      "pass": true,
+      "detail": "build/plugin-loader.done present"
+    },
+    {
+      "name": "src:hook-contract-docs",
+      "pass": true,
+      "detail": "src/hook-contract-docs non-empty"
+    },
+    {
+      "name": "checksh:hook-contract-docs",
+      "pass": true,
+      "detail": "src/hook-contract-docs/check.sh executable"
+    },
+    {
+      "name": "run:hook-contract-docs",
+      "pass": true,
+      "detail": "check.sh exit 0"
+    },
+    {
+      "name": "done:hook-contract-docs",
+      "pass": true,
+      "detail": "build/hook-contract-docs.done present"
+    },
+    {
+      "name": "src:highlight-plugin",
+      "pass": true,
+      "detail": "src/highlight-plugin non-empty"
+    },
+    {
+      "name": "checksh:highlight-plugin",
+      "pass": true,
+      "detail": "src/highlight-plugin/check.sh executable"
+    },
+    {
+      "name": "run:highlight-plugin",
+      "pass": true,
+      "detail": "check.sh exit 0"
+    },
+    {
+      "name": "done:highlight-plugin",
+      "pass": true,
+      "detail": "build/highlight-plugin.done present"
+    },
+    {
+      "name": "src:rss-plugin",
+      "pass": true,
+      "detail": "src/rss-plugin non-empty"
+    },
+    {
+      "name": "checksh:rss-plugin",
+      "pass": true,
+      "detail": "src/rss-plugin/check.sh executable"
+    },
+    {
+      "name": "run:rss-plugin",
+      "pass": true,
+      "detail": "check.sh exit 0"
+    },
+    {
+      "name": "done:rss-plugin",
+      "pass": true,
+      "detail": "build/rss-plugin.done present"
+    },
+    {
+      "name": "src:subsystem-integration",
+      "pass": true,
+      "detail": "src/subsystem-integration non-empty"
+    },
+    {
+      "name": "checksh:subsystem-integration",
+      "pass": true,
+      "detail": "src/subsystem-integration/check.sh executable"
+    },
+    {
+      "name": "run:subsystem-integration",
+      "pass": true,
+      "detail": "check.sh exit 0"
+    },
+    {
+      "name": "done:subsystem-integration",
+      "pass": true,
+      "detail": "build/subsystem-integration.done present"
+    },
+    {
+      "name": "review-verdict",
+      "pass": true,
+      "detail": "build/report.md has VERDICT: PASS"
+    }
+  ],
+  "passed": 24,
+  "total": 24,
+  "score": 1
+}
