@@ -1,0 +1,73 @@
+/* polish-pass: pretty layer on top of app-shell/style.css */
+
+/* animated gradient background */
+body {
+  background: linear-gradient(135deg, #0f1117, #1a1d2e, #16233a, #0f1117);
+  background-size: 400% 400%;
+  animation: gradient-shift 20s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* contrast boost: solid-ish card bg, brighter border + headings */
+.card {
+  background: rgba(36, 41, 61, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+.card h2 {
+  color: #cdd5e8;
+}
+
+/* card hover transitions */
+.card {
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.5);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* tabular-nums so clock digits don't jitter */
+.clock-time,
+.clock-hhmm,
+.clock-seconds {
+  font-variant-numeric: tabular-nums;
+}
+
+/* subtle entry animation: transform only — content never hidden */
+@keyframes rise-in {
+  from { transform: translateY(10px); }
+  to { transform: translateY(0); }
+}
+
+.card {
+  animation: rise-in 0.5s ease both;
+}
+.card:nth-child(2) { animation-delay: 0.08s; }
+.card:nth-child(3) { animation-delay: 0.16s; }
+
+/* responsive stack under 700px */
+@media (max-width: 700px) {
+  .dashboard {
+    grid-template-columns: 1fr;
+  }
+  body {
+    padding: 1rem;
+  }
+}
+
+/* accessibility: kill animations for reduced-motion users */
+@media (prefers-reduced-motion: reduce) {
+  body,
+  .card {
+    animation: none;
+    transition: none;
+  }
+}

@@ -1,0 +1,18 @@
+.clock-time {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+.clock-hhmm {
+  font-size: 3.5rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.clock-seconds {
+  font-size: 1.4rem;
+  opacity: 0.6;
+}
+.clock-date {
+  margin-top: 0.5rem;
+  opacity: 0.75;
+}

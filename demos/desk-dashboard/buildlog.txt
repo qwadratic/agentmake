@@ -1,0 +1,123 @@
+mkdir -p build
+../../engine/agent classify goal.md > build/effort.json
+jq -e '(.tier|IN("vague","standard","prd")) and (.fanout|test("^[0-9]+-[0-9]+$")) and (.review_depth|IN("smoke","standard","full")) and (.model_hint|IN("small","default","large")) and (.thinking|IN("off","low","medium","high"))' build/effort.json > /dev/null   # gate: schema
+../../engine/agent plan goal.md > build/plan.json
+jq -e '.components | length > 0' build/plan.json > /dev/null   # gate: valid decomposition
+jq -r '.components[] | "build/\(.id).done: build/plan.json \(.deps | map("build/\(.).done") | join(" "))\n\t$(AGENT) build \(.id)\n\tbash src/\(.id)/check.sh\n\ttouch $@\nCOMPONENTS += build/\(.id).done\n"' build/plan.json > build/components.mk
+../../engine/agent build app-shell
+Done. Files under `src/app-shell/`:
+
+- `index.html` — grid layout, 3 panel sections (`#clock-panel`, `#weather-panel`, `#todo-panel`) each with `.panel-body` mount point for sibling components
+- `style.css` — dark theme, glassmorphism cards (blur + translucent bg), 3-col grid
+- `app.js` — DOMContentLoaded placeholder fill; panels own their `.panel-body`
+- `selftest.js` — asserts 3 containers + linked css/js files exist
+- `check.sh` — executable, runs node self-test, passes
+
+ponytail: HTML "parse" is regex on string, not real parser — enough for asserting ids/links; upgrade path = jsdom if goal ever allows installs.
+bash src/app-shell/check.sh
+app-shell self-test OK
+touch build/app-shell.done
+../../engine/agent build clock-panel
+../../engine/agent build weather-panel
+../../engine/agent build todo-scratchpad
+Done. Files under `src/clock-panel/`:
+
+- `clock.js` — `formatTime(Date)` pure fn (hhmm/seconds/dateLine, zero-padded), browser mount into `#clock-panel .panel-body` per app-shell contract, `setInterval` 1s tick. Dual-env guard: `module.exports` for node, `DOMContentLoaded` for browser.
+- `clock.css` — big HH:MM, dimmed seconds, date line.
+- `selftest.js` — asserts midnight `00:00`, noon, single-digit `09:05`/`07`, year in date line.
+- `check.sh` — runs selftest, passes.
+
+ponytail: integration (adding `<script src="../clock-panel/clock.js">` + css link to app-shell index.html) left for polish-pass since rules restrict writes to `src/clock-panel/`.
+bash src/clock-panel/check.sh
+clock-panel selftest OK
+touch build/clock-panel.done
+Done. Files under `src/weather-panel/`:
+
+- **weather.js** — pure `weatherCodeToDisplay(code)` (WMO code → `{emoji, label}`, `❓ Unknown` fallback). Dual-mode: `module.exports` for node, DOM mount for browser. Fetches open-meteo `current_weather` for `WEATHER_CONFIG` (Berlin default, edit one object to change). Catch → "Weather unavailable (offline?)" fallback text.
+- **selftest.js** — asserts mapping for codes 0/3/61/75/95 + unknown (1234, undefined) fallback.
+- **check.sh** — executable, runs selftest, exits 0. Passed.
+
+Integration contract: script mounts into `#weather-panel .panel-body` from app-shell. Wiring = add `<script src="../weather-panel/weather.js"></script>` (or copy) to index.html — left to integration pass per component-boundary rule. Emoji/temp/label use classes `weather-emoji`, `weather-temp`, `weather-label` for polish-pass styling.
+bash src/weather-panel/check.sh
+weather-panel selftest OK
+touch build/weather-panel.done
+Done. Files under `src/todo-scratchpad/`:
+
+- **store.js** — pure functions on plain array: `addTodo` (trims, ignores blank), `toggleTodo`, `removeTodo`, `serialize`/`deserialize` (corrupt-safe), `save`/`load` against any storage-shaped object. Dual export: `module.exports` + `window.TodoStore`.
+- **todo.js** — UI mounting into `#todo-panel .panel-body` per app-shell contract. Enter adds, click text toggles strikethrough, ✕ deletes. Every mutation persists via `S.save(localStorage, ...)`.
+- **todo.css** — input + list styles matching dark glass theme.
+- **selftest.js** — node test: fake storage object, add/toggle/remove transitions, purity checks (originals untouched), round-trip serialize, corrupt-input fallbacks.
+- **check.sh** — runs selftest, exits 0. Verified passing.
+
+Integration for app-shell (files not touched — outside my write scope): add to `index.html`:
+
+```html
+<link rel="stylesheet" href="../todo-scratchpad/todo.css">
+<script src="../todo-scratchpad/store.js"></script>
+<script src="../todo-scratchpad/todo.js"></script>
+```
+
+ponytail: array index used as todo identity — fine for single-panel MVP, upgrade to id field if reordering/sync ever added.
+bash src/todo-scratchpad/check.sh
+todo-scratchpad selftest OK
+touch build/todo-scratchpad.done
+../../engine/agent build polish-pass
+Done. Files under `src/polish-pass/`:
+
+- `polish.css` — override layer: animated gradient bg (`@keyframes gradient-shift`), card hover lift (`transition`), `font-variant-numeric: tabular-nums` on `.clock-time/.clock-hhmm/.clock-seconds`, staggered `fade-in`, `@media (max-width: 700px)` single-column stack
+- `selftest.js` — greps CSS for `@media`, `transition`, `@keyframes`, `font-variant-numeric`; exit 1 if missing
+- `check.sh` — executable, runs selftest, passes
+- `README.md` — integration note: add `<link>` after `style.css` (app-shell not editable per rules)
+
+ponytail: overrides rely on same-specificity cascade order (load after style.css); fine for this scale, upgrade path is CSS layers if it grows.
+bash src/polish-pass/check.sh
+ok: @media
+ok: transition
+ok: @keyframes
+ok: font-variant-numeric
+polish-pass selftest passed
+touch build/polish-pass.done
+../../engine/agent review > build/report.md
+grep -q 'VERDICT: PASS' build/report.md
+make: *** [build/report.md] Error 1
+make: *** Deleting file `build/report.md'
+
+── fix-forward loop 1: app-shell retried with reviewer feedback (integration tags); re-running review gate ──
+../../engine/agent review > build/report.md
+grep -q 'VERDICT: PASS' build/report.md
+ [32m✓[0m build/effort.json
+ [32m✓[0m build/plan.json
+ [32m✓[0m build/app-shell.done
+ [32m✓[0m build/clock-panel.done
+ [32m✓[0m build/weather-panel.done
+ [32m✓[0m build/todo-scratchpad.done
+ [32m✓[0m build/polish-pass.done
+ [32m✓[0m build/report.md
+[########################] 8/8 (100%)
+graph TD
+  build/report.md --> all
+  goal.md --> build/effort.json
+  build --> build/effort.json
+  goal.md --> build/plan.json
+  build/effort.json --> build/plan.json
+  build/plan.json --> build/components.mk
+  build/components.mk --> build/report.md
+  $(COMPONENTS) --> build/report.md
+  build/plan.json --> build/app-shell.done
+  build/plan.json --> build/clock-panel.done
+  build/app-shell.done --> build/clock-panel.done
+  build/plan.json --> build/weather-panel.done
+  build/app-shell.done --> build/weather-panel.done
+  build/plan.json --> build/todo-scratchpad.done
+  build/app-shell.done --> build/todo-scratchpad.done
+  build/plan.json --> build/polish-pass.done
+  build/clock-panel.done --> build/polish-pass.done
+  build/weather-panel.done --> build/polish-pass.done
+  build/todo-scratchpad.done --> build/polish-pass.done
+
+── fix-forward loop 2: polish-pass retried with visual-eval feedback (opacity entry anim hid first paint; low contrast); re-snapped + goldens bootstrapped; re-running review gate ──
+../../engine/agent review > build/report.md
+grep -q 'VERDICT: PASS' build/report.md
+
+── final: wfcheck ──
+wfcheck: PASS 24/24 checks (score 1) — demos/desk-dashboard

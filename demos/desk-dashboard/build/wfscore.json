@@ -1,0 +1,127 @@
+{
+  "checks": [
+    {
+      "name": "plan-exists",
+      "pass": true,
+      "detail": "build/plan.json parses"
+    },
+    {
+      "name": "plan-schema",
+      "pass": true,
+      "detail": "components[] each have id/desc/deps"
+    },
+    {
+      "name": "dag-valid",
+      "pass": true,
+      "detail": "deps acyclic, all ids resolve"
+    },
+    {
+      "name": "src:app-shell",
+      "pass": true,
+      "detail": "src/app-shell non-empty"
+    },
+    {
+      "name": "checksh:app-shell",
+      "pass": true,
+      "detail": "src/app-shell/check.sh executable"
+    },
+    {
+      "name": "run:app-shell",
+      "pass": true,
+      "detail": "check.sh exit 0"
+    },
+    {
+      "name": "done:app-shell",
+      "pass": true,
+      "detail": "build/app-shell.done present"
+    },
+    {
+      "name": "src:clock-panel",
+      "pass": true,
+      "detail": "src/clock-panel non-empty"
+    },
+    {
+      "name": "checksh:clock-panel",
+      "pass": true,
+      "detail": "src/clock-panel/check.sh executable"
+    },
+    {
+      "name": "run:clock-panel",
+      "pass": true,
+      "detail": "check.sh exit 0"
+    },
+    {
+      "name": "done:clock-panel",
+      "pass": true,
+      "detail": "build/clock-panel.done present"
+    },
+    {
+      "name": "src:weather-panel",
+      "pass": true,
+      "detail": "src/weather-panel non-empty"
+    },
+    {
+      "name": "checksh:weather-panel",
+      "pass": true,
+      "detail": "src/weather-panel/check.sh executable"
+    },
+    {
+      "name": "run:weather-panel",
+      "pass": true,
+      "detail": "check.sh exit 0"
+    },
+    {
+      "name": "done:weather-panel",
+      "pass": true,
+      "detail": "build/weather-panel.done present"
+    },
+    {
+      "name": "src:todo-scratchpad",
+      "pass": true,
+      "detail": "src/todo-scratchpad non-empty"
+    },
+    {
+      "name": "checksh:todo-scratchpad",
+      "pass": true,
+      "detail": "src/todo-scratchpad/check.sh executable"
+    },
+    {
+      "name": "run:todo-scratchpad",
+      "pass": true,
+      "detail": "check.sh exit 0"
+    },
+    {
+      "name": "done:todo-scratchpad",
+      "pass": true,
+      "detail": "build/todo-scratchpad.done present"
+    },
+    {
+      "name": "src:polish-pass",
+      "pass": true,
+      "detail": "src/polish-pass non-empty"
+    },
+    {
+      "name": "checksh:polish-pass",
+      "pass": true,
+      "detail": "src/polish-pass/check.sh executable"
+    },
+    {
+      "name": "run:polish-pass",
+      "pass": true,
+      "detail": "check.sh exit 0"
+    },
+    {
+      "name": "done:polish-pass",
+      "pass": true,
+      "detail": "build/polish-pass.done present"
+    },
+    {
+      "name": "review-verdict",
+      "pass": true,
+      "detail": "build/report.md has VERDICT: PASS"
+    }
+  ],
+  "passed": 24,
+  "total": 24,
+  "score": 1
+}
