@@ -1,0 +1,27 @@
+#!/bin/bash
+# subtree <id> — scaffold composite component project dir (rfc-nested §4).
+# Idempotent, resume-safe. Called from the generated composite rule before
+# +$(MAKE) -C recurses; B/SRC come from the parent make's exported env.
+set -euo pipefail
+DIR=$(cd "$(dirname "$0")" && pwd)   # absolute engine dir — nested relative includes break at depth ≥ 2
+B=${B:-build} SRC=${SRC:-src}
+id=$1
+d=$SRC/$id
+mkdir -p "$d"
+
+# goal.md from plan.json .sub_goal — cmp guard preserves mtime (board.mk trick):
+# unchanged sub_goal ⇒ untouched mtime ⇒ child make resumes instead of replanning
+jq -r --arg id "$id" '.components[] | select(.id==$id) | .sub_goal // empty' "$B/plan.json" > "$d/goal.md.new"
+grep -q '[^[:space:]]' "$d/goal.md.new" || { echo "subtree: empty sub_goal for $id" >&2; exit 1; }
+if cmp -s "$d/goal.md.new" "$d/goal.md" 2>/dev/null; then rm "$d/goal.md.new"; else mv "$d/goal.md.new" "$d/goal.md"; fi
+
+# sacred 3-line project contract, engine path absolute
+[ -f "$d/Makefile" ] || printf 'GOAL ?= goal.md\ninclude %s/build.mk\n' "$DIR" > "$d/Makefile"
+
+# delegating gate: parent-level invariant (*.done iff built AND verified) holds
+# because this re-checks the subtree's own review verdict. Instant grep — immune
+# to wfcheck CHECK_TIMEOUT.
+if [ ! -x "$d/check.sh" ]; then
+  printf '#!/bin/bash\n# composite gate: done iff subtree review verdict PASS\ncd "$(dirname "$0")" && grep -q '\''^VERDICT: PASS$'\'' build/report.md\n' > "$d/check.sh"
+  chmod +x "$d/check.sh"
+fi

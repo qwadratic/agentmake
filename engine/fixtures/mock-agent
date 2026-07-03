@@ -1,0 +1,49 @@
+#!/bin/bash
+# mock-agent — deterministic engine/agent stand-in, ZERO LLM calls.
+# Same contract: classify <goal> | plan <goal> | build <id> | review
+#
+# Fixture DAG (nested-selftest): root = leaf-one, leaf-two(dep leaf-one),
+# comp(composite, dep leaf-one) → sub-a, sub-b(dep sub-a), sub-c(dep sub-b).
+# Plan branches on goal content: a goal containing SUBTREE-GOAL gets the
+# 3-sub-leaf plan, anything else the root plan.
+#
+# Knobs (env):
+#   MOCK_LOG      append-only call log (order/count assertions)
+#   MOCK_FAIL_ID  leaf id whose check.sh exits 1 (failure-bubble tests)
+set -euo pipefail
+B=${B:-build} SRC=${SRC:-src}
+log() { if [ -n "${MOCK_LOG:-}" ]; then echo "$*" >> "$MOCK_LOG"; fi; }
+
+role=$1; shift
+case $role in
+  classify)
+    log "classify d=${AGENTMAKE_DEPTH:-?} max=${MAXTIER:-unset}"
+    echo '{"tier":"standard","fanout":"3-5","review_depth":"standard","model_hint":"default","thinking":"medium"}'
+    ;;
+  plan)
+    log "plan d=${AGENTMAKE_DEPTH:-?}"
+    if grep -q 'SUBTREE-GOAL' "$1"; then
+      echo '{"components":[{"id":"sub-a","desc":"sub leaf a","deps":[]},{"id":"sub-b","desc":"sub leaf b","deps":["sub-a"]},{"id":"sub-c","desc":"sub leaf c","deps":["sub-b"]}]}'
+    else
+      echo '{"components":[{"id":"leaf-one","desc":"leaf one","deps":[]},{"id":"leaf-two","desc":"leaf two","deps":["leaf-one"]},{"id":"comp","desc":"composite chunk; buildable as one unit if depth-capped","deps":["leaf-one"],"kind":"composite","sub_goal":"SUBTREE-GOAL: build sub-a, sub-b, sub-c as a dependency chain."}]}'
+    fi
+    ;;
+  build)
+    id=$1
+    log "build $id"
+    mkdir -p "$SRC/$id"
+    echo "built $id at depth ${AGENTMAKE_DEPTH:-?}" > "$SRC/$id/artifact.txt"
+    if [ "$id" = "${MOCK_FAIL_ID:-}" ]; then
+      printf '#!/bin/bash\nexit 1\n' > "$SRC/$id/check.sh"
+    else
+      printf '#!/bin/bash\nexit 0\n' > "$SRC/$id/check.sh"
+    fi
+    chmod +x "$SRC/$id/check.sh"
+    ;;
+  review)
+    log "review d=${AGENTMAKE_DEPTH:-?}"
+    echo '# mock review'
+    echo 'VERDICT: PASS'
+    ;;
+  *) echo "mock-agent: unknown role: $role" >&2; exit 1 ;;
+esac

@@ -13,6 +13,13 @@
 #   GOAL ?= goal.md        # optional overrides: GOAL, B, SRC, AGENT
 #   include engine/build.mk
 #
+# Nested decomposition (docs/rfc-nested.md): a plan component may be
+# "kind":"composite" with a "sub_goal" — it becomes a full nested project at
+# src/<id>/ running this same file. Bounds, all deterministic (not prompt trust):
+#   AGENTMAKE_MAXDEPTH (default 3) — deeper composites forced to leaf
+#   MAXTIER — subtree classify clamped to parent tier (monotone non-increasing)
+#   MAXFANOUT (default 8) — plan gate rejects wider decompositions per level
+#
 SHELL := /bin/bash
 .DELETE_ON_ERROR:  # failed agent ≠ done artifact
 
@@ -22,6 +29,20 @@ B     ?= build
 SRC   ?= src
 AGENT ?= $(ENGINE)agent
 export GOAL B SRC   # agent adapter reads these
+
+# ── Recursion bounds (rfc-nested §3a). Exported for the agent subprocess
+# (prompt conditional), NOT for child make — child overrides ride the $(MAKE)
+# command line (strongest origin; env would silently defeat the child's ?=).
+# MAXTIER: subtree classify ceiling (root unbounded). MAXFANOUT: top of prd
+# fanout range, per-level tree-width insurance. No inline comments here —
+# make keeps the trailing whitespace and a MAXTIER of "prd   " defeats the clamp.
+AGENTMAKE_DEPTH    ?= 0
+AGENTMAKE_MAXDEPTH ?= 3
+MAXTIER            ?= prd
+MAXFANOUT          ?= 8
+export AGENTMAKE_DEPTH AGENTMAKE_MAXDEPTH MAXTIER
+NEXT_DEPTH := $(shell expr $(AGENTMAKE_DEPTH) + 1)
+AT_CAP     := $(shell [ $(AGENTMAKE_DEPTH) -ge $(AGENTMAKE_MAXDEPTH) ] && echo 1 || echo 0)
 
 .PHONY: all progress graph clean
 
@@ -35,12 +56,19 @@ $(B)/effort.json: $(GOAL) | $(B)
 # ── Phase 1: decomposition (agent, no tools)
 $(B)/plan.json: $(GOAL) $(B)/effort.json
 	$(AGENT) plan $< > $@
-	jq -e '.components | length > 0' $@ > /dev/null   # gate: valid decomposition
+	jq -e --argjson maxf $(MAXFANOUT) '(.components | length > 0 and length <= $$maxf) and all(.components[]; (.kind // "leaf") == "leaf" or (.sub_goal | type=="string" and length > 0))' $@ > /dev/null   # gate: valid decomposition; composite ⇒ sub_goal; bounded fanout
 
 # ── Phase 2: plan generates the DAG — dep edges come from the agent
+# Fork per component kind (rfc-nested §3b): leaf → build agent; composite →
+# scaffold subtree + recurse. AT_CAP=1 forces the leaf branch regardless of the
+# planner (deterministic depth bound). Child vars go on the $(MAKE) command
+# line: kills the export env leak AND beats MAKEFLAGS-propagated assignments.
+# MAXTIER=$$(jq -r .tier …) resolves at recipe run time — parent's classified
+# tier becomes the child's ceiling. Uniform tail (check.sh + touch) keeps
+# sentinel semantics identical for both kinds.
 -include $(B)/components.mk
 $(B)/components.mk: $(B)/plan.json
-	jq -r '.components[] | "$(B)/\(.id).done: $(B)/plan.json \(.deps | map("$(B)/\(.).done") | join(" "))\n\t$$(AGENT) build \(.id)\n\tbash $(SRC)/\(.id)/check.sh\n\ttouch $$@\nCOMPONENTS += $(B)/\(.id).done\n"' $< > $@
+	jq -r --arg cap "$(AT_CAP)" '.components[] | "$(B)/\(.id).done: $(B)/plan.json \(.deps | map("$(B)/\(.).done") | join(" "))\n" + (if (.kind // "leaf") == "composite" and $$cap != "1" then "\t$$(ENGINE)subtree \(.id)\n\t+$$(MAKE) -C $(SRC)/\(.id) GOAL=goal.md B=build SRC=src AGENTMAKE_DEPTH=$(NEXT_DEPTH) MAXTIER=$$$$(jq -r .tier $(B)/effort.json) all\n" else "\t$$(AGENT) build \(.id)\n" end) + "\tbash $(SRC)/\(.id)/check.sh\n\ttouch $$@\nCOMPONENTS += $(B)/\(.id).done\n"' $< > $@
 
 # ── Phase 3: reviewer agent gate
 # components.mk prereq: without it, a failed plan/effort gate leaves COMPONENTS

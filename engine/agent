@@ -100,10 +100,24 @@ role=$1; shift
 case $role in
   classify)
     export GOAL_TEXT="$(cat "$1")"
-    run classify no "$(render classify.md)" | sed '/^```/d'
+    # MAXTIER clamp (rfc-nested §5b): deterministic post-process — LLM output is
+    # a trust boundary; a subtree can never exceed its parent's tier. Clamps the
+    # WHOLE knob row (a clamped tier with prd fanout/model defeats the point).
+    run classify no "$(render classify.md)" | sed '/^```/d' | jq -c --arg max "${MAXTIER:-prd}" '
+      def r: {"vague":0,"standard":1,"prd":2};
+      def row: {"vague":   {tier:"vague",   fanout:"2-3",review_depth:"smoke",   model_hint:"small",  thinking:"low"},
+                "standard":{tier:"standard",fanout:"3-5",review_depth:"standard",model_hint:"default",thinking:"medium"}};
+      if r[.tier] > r[$max] then row[$max] else . end'
     ;;
   plan)
     export GOAL_TEXT="$(cat "$1")" FANOUT="$(knob fanout "3-5")"
+    # depth-conditional composite permission — optimization only; the jq template
+    # in build.mk (AT_CAP) is the enforcement
+    if [ "${AGENTMAKE_DEPTH:-0}" -lt "${AGENTMAKE_MAXDEPTH:-3}" ]; then
+      export COMPOSITE_RULES='A component too large for one focused build session may set "kind":"composite" with "sub_goal": a self-contained goal spec (markdown, own acceptance criteria) for recursive decomposition. Use sparingly — most components are leaves.'
+    else
+      export COMPOSITE_RULES='Every component MUST be a leaf: omit "kind" or set "kind":"leaf". Composite is forbidden at this depth.'
+    fi
     run plan no "$(render plan.md)" | sed '/^```/d'
     ;;
   build)

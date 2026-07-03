@@ -192,6 +192,19 @@ on the way. The sentinel invariant survives recursion intact: the delegating
 `VERDICT: PASS`, so a parent `.done` still exists if and only if the component
 was built *and* verified — it just means "the whole subtree" now.
 
+**Three deterministic bounds, none of them prompt trust.** The tree cannot
+run away, and no bound depends on an LLM obeying instructions.
+`AGENTMAKE_MAXDEPTH` (default 3): at the cap the jq template emits the leaf
+branch regardless of what the planner said — `desc` stays mandatory as the
+buildable fallback, so a composite-grade component still builds as one unit.
+`MAXTIER`: the child's classify output is clamped to the parent's tier in
+`engine/agent` — the *whole* knob row, not just the tier string (a clamped
+tier keeping prd fanout and a large model would defeat the point) — so effort
+is monotone non-increasing down the tree. `MAXFANOUT` (default 8): the plan
+gate rejects wider decompositions per level, bounding the tree at
+MAXFANOUT^MAXDEPTH leaves. The planner controls tree *shape* within these
+bounds; it cannot exceed them.
+
 **A `cmp` guard preserves resume across the boundary.** The `subtree` helper
 rewrites a child's `goal.md` only when the planned `sub_goal` text actually
 changed, comparing with `cmp` before moving the new file into place. An
