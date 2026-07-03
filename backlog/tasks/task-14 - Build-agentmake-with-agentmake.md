@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@pi-fixer'
 created_date: '2026-07-03 18:20'
-updated_date: '2026-07-03 20:04'
+updated_date: '2026-07-03 20:06'
 labels: []
 dependencies: []
 references:
@@ -30,7 +30,7 @@ Constraints: GNU make + bash + jq + coreutils only; no network; no LLM calls ins
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 STEERING.md arc executed end to end
+- [x] #1 STEERING.md arc executed end to end
 - [x] #2 docs/dogfood-autopsy.md captures the dogfood attempt mess
 - [x] #3 engine/board.mk exists and makes backlog the default board (make board-next)
 - [x] #4 engine decomposes this task and builds itself from the board
@@ -56,3 +56,9 @@ board-next run: all gates passed; artifacts in board/TASK-14/
 
 Self-host run 3 green end-to-end: make board-task TASK=TASK-14 -> 7 components (stub-agent, plan-gate, components-generator, engine-core-makefile, census-target, mermaid-target, e2e-check), dep-ordered -j2, every check.sh green, review VERDICT: PASS, census 10/10, wfcheck 32/32 (score 1). Artifacts committed under board/TASK-14/.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+STEERING arc executed end to end. (1) Dogfood: two real self-development runs committed verbatim (dogfood-board-next/, dogfood-progress-json/) - gates green, zero integration. (2) Mess captured with verbatim tree snapshot in docs/dogfood-autopsy.md. (3) engine/board.mk makes backlog the default board: make board-next pulls top To Do task, materializes description as goal.md in board/<id>/, runs pipeline, marks Done via backlog CLI on gate pass; failed gates leave task In Progress and the run resumable. (4) Self-host: board-next pulled this task, engine decomposed it into 7 components and built a working engine copy, e2e-checked with a deterministic stub agent; review VERDICT: PASS, wfcheck 32/32 (score 1), artifacts in board/TASK-14/. README section 'Eating the dogfood' tells the mess->board story; roadmap contradiction removed. Follow-up: task-15 planner JSON hardening (runs 1-2 evidence).
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -176,6 +176,51 @@ MODEL_SMALL=... MODEL_LARGE=... make # what the classifier's model hints resolve
 Per-unit overrides (route one hard component to a big model without upgrading
 the whole run) go in `build/effort.json` — see the header of `engine/agent`.
 
+## Eating the dogfood: why the board is the default
+
+We pointed the engine at its own repo — one ad-hoc `goal.md` per engine
+improvement, the tool's own documented workflow. Both runs came back green:
+every `check.sh` passed, both reviews said `VERDICT: PASS`. And both were
+failures. Asked to integrate with "our backlog board", the agents never found
+the real board sitting two directories up — they invented their own board
+format and built a gate-passing pipeline against their own fixtures. The
+other run left a stray `report.md` at the wrong level and reached outside its
+run dir. Root of the repo: two clutter directories, two orphan
+`effort.json`, zero improvements landed. The full mess is committed verbatim
+(`dogfood-board-next/`, `dogfood-progress-json/`) and dissected in
+[docs/dogfood-autopsy.md](docs/dogfood-autopsy.md).
+
+The lesson: gates measure internal consistency, not integration — and ad-hoc
+goal files carry no queue semantics. No discovery, no lifecycle, no ordering,
+one clutter dir per idea. Every one of those is a work-queue problem, and the
+repo already had a work queue: the [Backlog.md board](backlog/tasks/). So the
+board is now the engine's default goal source
+([`engine/board.mk`](engine/board.mk)):
+
+```sh
+make board                     # the queue, straight from the backlog CLI
+make board-next                # top To Do task -> board/<id>/goal.md -> pipeline
+                               #   -> gates pass -> task marked Done via the CLI
+make board-task TASK=TASK-7    # explicit pick; also the resume path — a failed
+                               #   gate leaves the task In Progress, rerun continues
+```
+
+Task = goal unit. The task *description* is the goal body; acceptance
+criteria stay on the board and get checked via the CLI as gates pass. Backlog
+CLI only — nothing edits `backlog/**/*.md` by hand.
+
+Proof it closes the loop: the board's task-14 — *“Build agentmake with
+agentmake”* — was pulled by `make board-next`, decomposed by the engine into
+7 components (stub agent, plan gate, components generator, engine core
+makefile, census, mermaid graph, e2e check), built dep-ordered under `-j2`,
+and passed full review — the produced engine runs a goal end-to-end with a
+deterministic stub agent, no LLM in the checks.
+[wfcheck](evals/wfcheck): 32/32, score 1.0. Run artifacts:
+[`board/TASK-14/`](board/TASK-14/). It took three runs — the first two died
+at the plan gate when the planner hallucinated tool calls instead of JSON
+(`.DELETE_ON_ERROR` cleaned up, the task stayed In Progress, rerun resumed);
+the fix and the follow-up hardening task are on the board.
+
 ## pi extension: demo mode
 
 ```sh
@@ -190,10 +235,11 @@ pi sessions know how to scaffold and drive the pipeline.
 
 ## Roadmap
 
-Lives on the [Backlog.md board](backlog/tasks/) (`backlog board` to view):
-retry-with-feedback loops, nested decomposition via recursive make, the board
-itself as the engine's work queue, per-artifact token accounting, persistent
-CDP screenshot pool, and more.
+Lives on the [Backlog.md board](backlog/tasks/) (`backlog board` to view) —
+which is also the engine's work queue, so any item below is one
+`make board-next` away from being attempted: retry-with-feedback loops,
+nested decomposition via recursive make, planner JSON output hardening,
+per-artifact token accounting, persistent CDP screenshot pool, and more.
 
 ## Honest limitations
 
@@ -207,6 +253,11 @@ CDP screenshot pool, and more.
   the documented pattern rules.
 - **Flat DAG.** One level of decomposition, fan-out capped at 8. A component
   that should itself be a project stays one agent's problem.
+- **Tool-less planners can roleplay.** Deny tools to a planning agent and
+  hand it a goal that references files, and it may hallucinate an entire
+  tool-call transcript before the JSON (observed on the self-host run — the
+  jq gate rejected it twice; retries are paid). Hardening is task-15 on the
+  board.
 - **Plans are nondeterministic.** Same goal, different runs, different
   component splits. The gates hold either way, but `build/` is not
   bit-reproducible; matrix wall/cost numbers are single-run trends.
@@ -226,3 +277,4 @@ CDP screenshot pool, and more.
 - [Engine internals](docs/engine-internals.md) — the make features doing the work, with verbatim excerpts
 - [Evals](docs/evals.md) — the toolbox, when each fires, golden update protocol
 - [Effort & HITL](docs/effort-and-hitl.md) — effort tiers, knob plumbing, the approval-file design
+- [Dogfood autopsy](docs/dogfood-autopsy.md) — the mess that made the board the default, tree snapshot verbatim
