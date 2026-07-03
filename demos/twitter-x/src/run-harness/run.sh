@@ -52,6 +52,8 @@ if [ "$CHECK" = 0 ]; then
 fi
 
 ### --check: A1-A5 ###
+EVALS=../../../../evals   # engine eval tools (apieval)
+DEMO=../..                # demo root (evals/*.jq queries, goldens/*.toon)
 
 # A1: 3 consecutive health calls via proxy hit 3 different backend ports
 PORTS=""
@@ -75,6 +77,16 @@ for t in ts:
     assert set(t) == need, f"schema mismatch: {set(t)}"
 ' || fail "A2 timeline schema/order"
 echo "A2 OK: timeline schema newest-first"
+
+# A2b: TOON golden — pre-post timeline is pure deterministic seed data.
+# Query strips nothing volatile away except keeping only seed ids (<=8);
+# run BEFORE A3 posts. lb-stats query strips ports+counts (random ports,
+# counters grow) — after A1 round-robin every backend has >=1 request.
+"$EVALS/apieval" "$PURL/api/timeline" "$DEMO/evals/timeline.jq" "$DEMO/goldens/timeline.toon" \
+  || fail "A2b apieval timeline golden"
+"$EVALS/apieval" "$PURL/lb-stats" "$DEMO/evals/lb-stats.jq" "$DEMO/goldens/lb-stats.toon" \
+  || fail "A2b apieval lb-stats golden"
+echo "A2b OK: TOON API goldens (timeline, lb-stats)"
 
 # A3: POST via proxy visible from a DIFFERENT backend
 TEXT="harness-check-$$-$RANDOM"

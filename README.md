@@ -119,13 +119,17 @@ code is its verdict, so any of them can sit on a recipe line as a gate:
 
 A TOON golden from the twitter-x demo — keys declared once, rows diff cleanly,
 volatile fields already stripped by the `.jq` reshape
-([`goldens/lb-stats.toon`](demos/twitter-x/goldens/lb-stats.toon)):
+([`goldens/timeline.toon`](demos/twitter-x/goldens/timeline.toon), re-checked
+live on every `run.sh --check` via `apieval`):
 
 ```
-all_nonzero: true
-backends: 3
-ports[3]: 9101,9102,9103
-total_is_sum: true
+le_limit: true
+newest_first: true
+seed_tweets[8]{handle,id,likes,name,replies,retweets,text,ts}:
+  elonrusk,1,88400,Elon Rusk,4821,9210,Shipping the new algorithm next week. It's going to be wild.,Jul 1
+  sundarp,2,15300,Sundar P.,812,2100,"AI will change how we search, code, and create. Excited for what's next.",Jun 30
+  gvanrossum,3,9800,Guido van Rossum,233,1400,"Reminder: readability counts. Your future self will thank you.",5h
+  ...
 ```
 
 And the multi-model matrix, same `wordfreq` goal, same gates

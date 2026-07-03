@@ -1,3 +1,11 @@
 le_limit: true
 newest_first: true
-seed_tweets: []
+seed_tweets[8]{handle,id,likes,name,replies,retweets,text,ts}:
+  elonrusk,1,88400,Elon Rusk,4821,9210,Shipping the new algorithm next week. It's going to be wild.,Jul 1
+  sundarp,2,15300,Sundar P.,812,2100,"AI will change how we search, code, and create. Excited for what's next.",Jun 30
+  gvanrossum,3,9800,Guido van Rossum,233,1400,"Reminder: readability counts. Your future self will thank you.",5h
+  dan_abramov,4,5200,Dan Abramov,156,640,"Hot take: most state doesn't need to be global. Keep it close to where it's used.",3h
+  elonrusk,5,61000,Elon Rusk,3100,7800,Rockets are just servers that scale vertically.,2h
+  gvanrossum,6,6400,Guido van Rossum,98,870,There should be one-- and preferably only one --obvious way to do it.,1h
+  sundarp,7,2900,Sundar P.,64,310,Great teams ship. Even better teams ship and then listen.,45m
+  dan_abramov,8,1800,Dan Abramov,41,120,Wrote a reverse proxy in pure stdlib today. Felt good.,12m
