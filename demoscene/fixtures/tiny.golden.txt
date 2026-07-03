@@ -1,0 +1,14 @@
+   1   │ \ tiny fixture: attn golden-test corpus (do not edit — attn-selfcheck.py pins it) #
+   2   │ variable D depth▓D
+   3   │ 
+   4   │ : D spaces▓D ( n -- ) #
+   5 ◆ │   begin░C dup░S 0 L >░P if▒C 32 L emit P 1 L -░P 0 L else▓C -1 L then░C until▒C drop S ; D
+   6   │ 
+   7   │ : D ind▓D depth█U @░P spaces█U ; D
+   8   │ 
+   9   │ : D greet▓D ." P hi L" cr P ; D
+  10   │ 
+  11   │ ind█U
+  12   │ greet█U frobnicate U 42 L . P
+  13   │ 
+attn Ddef Cctl Sstk Llit #com Uusr Pprim  w=glyph ◆=junction  [interpretive proxy — not model internals]

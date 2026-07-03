@@ -1,0 +1,698 @@
+#!/usr/bin/env python3
+"""attn — interpretive attention renderer for forth-forth (attn-proxy/1).
+
+HONESTY CONTRACT: everything rendered here is an INTERPRETIVE PROXY derived
+from forth grammar structure, token categories, and session recency. It is
+NOT model attention. Hosted models expose no internals. The exact string
+"interpretive proxy — not model internals" appears in every frame legend and
+every JSON sidecar; nothing disables it.
+
+Spec: demoscene/ATTN-SPEC.md. Executable weight definition:
+demoscene/attn-proxy-check.py (this file matches it exactly).
+
+Usage:
+  attn view <file.fs> [--focus WORD] [--no-color] [--tags] [--json OUT]
+  attn session <trace.jsonl> [--fps N] [--no-color] [--tags] [--json OUT]
+  attn timeline <trace.jsonl> ...           (alias of session)
+
+python3 stdlib only.
+"""
+import argparse
+import json
+import math
+import os
+import re
+import sys
+import time
+import difflib
+import datetime
+
+DISCLAIMER = "interpretive proxy — not model internals"
+HEURISTIC = "attn-proxy/1"
+NUM_RE = re.compile(r"^[+-]?\d+$")
+NORM = 1.6
+TAU = 6.0
+
+# ---- dialect tables (stage0 word set; mirror attn-proxy-check.py) ----
+DEF_WORDS = {":", ";", "variable", "constant"}
+CTL_WORDS = {"if", "else", "then", "begin", "until", "do", "loop", "i"}
+STK_WORDS = {"dup", "drop", "swap", "over", "rot"}
+PRIM_WORDS = {"+", "-", "*", "/", "mod", "negate", "=", "<", ">",
+              "@", "!", ".", "emit", "cr", "token", "h.", "h=", "h>n", '."', 's"'}
+ARITY = {"dup": (1, 2), "drop": (1, 0), "swap": (2, 2), "over": (2, 3), "rot": (3, 3),
+         "+": (2, 1), "-": (2, 1), "*": (2, 1), "/": (2, 1), "mod": (2, 1),
+         "negate": (1, 1), "=": (2, 1), "<": (2, 1), ">": (2, 1),
+         "@": (1, 1), "!": (2, 0), ".": (1, 0), "emit": (1, 0), "cr": (0, 0),
+         "token": (0, 1), "h.": (1, 0), "h=": (2, 1), "h>n": (1, 2), "i": (0, 1)}
+MAX_ACT = 6  # rot: 3+3
+JUNCTION_BONUS = {"if": 0.8, "else": 0.8, "until": 0.8, "loop": 0.8,
+                  "begin": 0.4, "do": 0.4, "then": 0.4}
+DECISION = {"if", "else", "until", "loop"}
+ANCHOR = {"begin", "do", "then"}
+
+CATS = ["def", "ctl", "stk", "lit", "com", "usr", "prim"]
+FG256 = {"def": 213, "ctl": 214, "stk": 51, "lit": 255, "com": 244, "usr": 75, "prim": 114}
+FGTRUE = {"def": (0xff, 0x87, 0xff), "ctl": (0xff, 0xaf, 0x00), "stk": (0x00, 0xff, 0xff),
+          "lit": (0xee, 0xee, 0xee), "com": (0x80, 0x80, 0x80), "usr": (0x5f, 0xaf, 0xff),
+          "prim": (0x87, 0xd7, 0x87)}
+UNKNOWN_FG256 = 196
+UNKNOWN_FGTRUE = (0xff, 0x00, 0x00)
+BG256 = [234, 237, 58, 130, 166]
+GLYPHS = [" ", "░", "▒", "▓", "█"]
+TAG = {"def": "D", "ctl": "C", "stk": "S", "lit": "L", "com": "#", "usr": "U", "prim": "P"}
+
+
+# ---------------------------------------------------------------- tokenizer
+class Tok:
+    __slots__ = ("i", "line", "col", "text", "kind", "cat", "w", "depth",
+                 "junction", "unknown", "defname_of")
+
+    def __init__(self, line, col, text, kind):
+        self.i = -1
+        self.line = line   # 1-based
+        self.col = col     # 1-based
+        self.text = text
+        self.kind = kind   # word | com | pay
+        self.cat = None
+        self.w = 0.0
+        self.depth = 0
+        self.junction = None
+        self.unknown = False
+        self.defname_of = None  # ':'|'variable'|'constant' when this token is a def name
+
+
+def _emit_span(toks, text, line, col, kind):
+    """Emit text as one token per line so render spans never cross lines."""
+    for part in text.split("\n"):
+        if part:
+            toks.append(Tok(line, col, part, kind))
+        line += 1
+        col = 1
+
+
+def tokenize(src):
+    """Forth tokenizer with line/col; comments + string payloads split per line."""
+    toks = []
+    i, n = 0, len(src)
+    line, col = 1, 1
+
+    def adv(j):  # advance position bookkeeping over src[i:j]
+        nonlocal line, col, i
+        for c in src[i:j]:
+            if c == "\n":
+                line += 1
+                col = 1
+            else:
+                col += 1
+        i = j
+
+    while i < n:
+        while i < n and src[i].isspace():
+            adv(i + 1)
+        if i >= n:
+            break
+        j = i
+        while j < n and not src[j].isspace():
+            j += 1
+        word = src[i:j]
+        wline, wcol = line, col
+        adv(j)
+        t = word.lower()
+        if t == "\\":
+            k = src.find("\n", i)
+            k = n if k < 0 else k
+            _emit_span(toks, word + src[i:k], wline, wcol, "com")
+            adv(k)
+        elif t == "(":
+            k = src.find(")", i)
+            k = n - 1 if k < 0 else k
+            _emit_span(toks, word + src[i:k + 1], wline, wcol, "com")
+            adv(k + 1)
+        elif t in ('."', 's"'):
+            toks.append(Tok(wline, wcol, word, "word"))
+            k = i
+            if k < n and src[k].isspace():
+                k += 1  # single delimiter after the word (stage0 read_string)
+            adv(k)
+            q = src.find('"', i)
+            q = n if q < 0 else q
+            _emit_span(toks, src[i:q], line, col, "pay")
+            adv(min(q + 1, n))
+        else:
+            toks.append(Tok(wline, wcol, word, "word"))
+    for idx, tk in enumerate(toks):
+        tk.i = idx
+    return toks
+
+
+# ---------------------------------------------------------------- analysis
+def analyze(src):
+    """Tokenize + categorize + weight (static, no recency) + edges.
+
+    Returns (tokens, edges, meta). Weight formula matches
+    attn-proxy-check.py exactly: base applies to def *keywords* and lits;
+    def-site NAME tokens render cat 'def' but weigh like the check (w_ref
+    only) — that is the spec's validated executable definition.
+    """
+    toks = tokenize(src)
+    lines = src.count("\n") + 1
+
+    # dictionary pass: def sites, reference counts
+    defline = {}      # word -> line of first def
+    defname_idx = {}  # word -> token idx of first def-name token
+    prev_kw = None
+    for tk in toks:
+        if tk.kind != "word":
+            prev_kw = None
+            continue
+        t = tk.text.lower()
+        if prev_kw is not None:
+            tk.defname_of = prev_kw
+            if t not in defline:
+                defline[t] = tk.line
+                defname_idx[t] = tk.i
+            prev_kw = None
+        elif t in (":", "variable", "constant"):
+            prev_kw = t
+        else:
+            prev_kw = None
+    defs = set(defline)
+    refcount = {w: 0 for w in defs}
+    callsites = {w: [] for w in defs}
+    for tk in toks:
+        if tk.kind == "word" and tk.defname_of is None:
+            t = tk.text.lower()
+            if t in defs and t not in DEF_WORDS and not (
+                    t in CTL_WORDS or t in STK_WORDS or t in PRIM_WORDS or NUM_RE.match(t)):
+                refcount[t] += 1
+                callsites[t].append(tk)
+    maxref = max([r for r in refcount.values() if r > 0] or [1])
+
+    # categories + weights
+    seen_defs = set()
+    depth = 0
+    var_words = {w for w in defs
+                 if toks[defname_idx[w]].defname_of in ("variable", "constant")}
+    for tk in toks:
+        if tk.kind == "com":
+            tk.cat = "com"
+            tk.w = 0.05
+            tk.depth = depth
+            continue
+        if tk.kind == "pay":
+            tk.cat = "lit"
+            tk.w = min(1.0, 0.15 / NORM)
+            tk.depth = depth
+            continue
+        t = tk.text.lower()
+        if tk.defname_of is not None:
+            tk.cat = "def"  # display cat per spec §1
+        elif t in DEF_WORDS:
+            tk.cat = "def"
+        elif t in CTL_WORDS:
+            tk.cat = "ctl"
+        elif t in STK_WORDS:
+            tk.cat = "stk"
+        elif t in PRIM_WORDS:
+            tk.cat = "prim"
+        elif NUM_RE.match(t):
+            tk.cat = "lit"
+        elif t in seen_defs:
+            tk.cat = "usr"
+        elif t in defs:
+            tk.cat = "usr"  # forward reference: would crash stage0 -> bug beacon
+            tk.unknown = True
+        else:
+            tk.cat = "usr"
+            tk.unknown = True
+
+        tk.depth = depth
+        w_ref = w_stack = w_edge = w_j = 0.0
+        if t in defs:
+            w_ref = math.log2(1 + refcount[t]) / math.log2(1 + maxref)
+        if t in ARITY:
+            cns, prd = ARITY[t]
+            w_stack = (cns + prd) / MAX_ACT
+        if t in defs and tk.defname_of is None and tk.cat == "usr" and not tk.unknown:
+            d = abs(tk.line - defline[t])
+            if d:
+                w_edge = min(1.0, math.log(1 + d) / math.log(1 + lines))
+        if t in JUNCTION_BONUS and tk.defname_of is None:
+            tk.junction = "decision" if t in DECISION else "anchor"
+            w_j = JUNCTION_BONUS[t] * min(1.5, 1 + 0.15 * depth)
+        if tk.defname_of is None:
+            if t in ("if", "begin", "do"):
+                depth += 1
+            elif t in ("then", "until", "loop"):
+                depth = max(0, depth - 1)
+        if tk.defname_of is not None:
+            seen_defs.add(t)
+        base = 0.3 if (tk.cat == "def" and tk.defname_of is None) else (
+            0.15 if tk.cat == "lit" else 0.0)
+        if tk.unknown:
+            tk.w = 0.0  # forced: bug beacon, not attention
+        else:
+            tk.w = min(1.0, (base + w_ref + w_stack + w_edge + w_j) / NORM)
+
+    edges = _edges(toks, defs, defname_idx, callsites, defline, lines, var_words)
+    meta = {"defs": defs, "defline": defline, "refcount": refcount,
+            "defname_idx": defname_idx, "lines": lines}
+    return toks, edges, meta
+
+
+def _edges(toks, defs, defname_idx, callsites, defline, lines, var_words):
+    edges = []
+    # §2.1 def-use edges (long-range head); deterministic order (defs is a set)
+    for w in sorted(callsites, key=lambda k: defname_idx[k]):
+        sites = callsites[w]
+        src_i = defname_idx[w]
+        for tk in sites:
+            d = abs(tk.line - defline[w])
+            ew = min(1.0, math.log(1 + d) / math.log(1 + lines)) if d else 0.0
+            edges.append({"type": "defuse", "from": src_i, "to": tk.i, "w": round(ew, 3)})
+    # §2.3 structural pair edges
+    stack = []
+    for tk in toks:
+        if tk.kind != "word" or tk.defname_of is not None:
+            continue
+        t = tk.text.lower()
+        if t in ("if", "begin", "do"):
+            stack.append(tk)
+        elif t == "else" and stack:
+            edges.append({"type": "pair", "from": stack[-1].i, "to": tk.i, "w": 0.6})
+            stack[-1] = tk  # else chains to then
+        elif t in ("then", "until", "loop") and stack:
+            op = stack.pop()
+            edges.append({"type": "pair", "from": op.i, "to": tk.i, "w": 0.6})
+    # §2.2 stack-effect coupling (local head), abstract cells; junction re-own
+    cells = []  # token idx of pusher per abstract cell
+    for tk in toks:
+        if tk.kind == "com":
+            continue
+        t = tk.text.lower()
+        if tk.kind == "pay":
+            continue
+        if tk.defname_of is not None or t in (":", ";"):
+            cells = []  # definition boundary resets abstract stack
+            continue
+        if NUM_RE.match(t) or t == 's"':
+            cells.append(tk.i)
+            continue
+        if t in ARITY:
+            cns, prd = ARITY[t]
+            for _ in range(cns):
+                if cells:
+                    a = cells.pop()
+                    if a != tk.i:
+                        edges.append({"type": "stack", "from": a, "to": tk.i, "w": 0.4})
+            cells.extend([tk.i] * prd)
+        elif t in JUNCTION_BONUS:
+            if t in ("if", "until"):
+                if cells:
+                    a = cells.pop()
+                    edges.append({"type": "stack", "from": a, "to": tk.i, "w": 0.4})
+            elif t == "do":
+                for _ in range(2):
+                    if cells:
+                        a = cells.pop()
+                        edges.append({"type": "stack", "from": a, "to": tk.i, "w": 0.4})
+            # cells crossing the junction couple to the junction token (§2.2)
+            cells = [tk.i] * len(cells)
+        elif t in var_words:
+            cells.append(tk.i)  # variable/constant pushes an address
+        else:
+            cells = []  # colon word / unknown: arity opaque -> barrier
+    # dedupe stack edges
+    seen = set()
+    out = []
+    for e in edges:
+        key = (e["type"], e["from"], e["to"])
+        if key not in seen:
+            seen.add(key)
+            out.append(e)
+    return out
+
+
+# ---------------------------------------------------------------- rendering
+def _truecolor():
+    return os.environ.get("COLORTERM", "") == "truecolor"
+
+
+def _bucket(w):
+    return min(4, int(w * 5))
+
+
+def _bg_true(w):
+    if w <= 0.5:
+        f = w / 0.5
+        rgb = tuple(int(a * f) for a in (0x5f, 0x1f, 0x00))
+    else:
+        f = (w - 0.5) / 0.5
+        lo, hi = (0x5f, 0x1f, 0x00), (0xaf, 0x45, 0x00)
+        rgb = tuple(int(a + (b - a) * f) for a, b in zip(lo, hi))
+    return "\x1b[48;2;%d;%d;%dm" % rgb
+
+
+def _sgr_for(tk, opts, w=None):
+    w = tk.w if w is None else w
+    parts = []
+    if _truecolor():
+        r, g, b = UNKNOWN_FGTRUE if tk.unknown else FGTRUE[tk.cat]
+        parts.append("\x1b[38;2;%d;%d;%dm" % (r, g, b))
+        parts.append(_bg_true(w))
+    else:
+        fg = UNKNOWN_FG256 if tk.unknown else FG256[tk.cat]
+        parts.append("\x1b[38;5;%dm" % fg)
+        parts.append("\x1b[48;5;%dm" % BG256[_bucket(w)])
+    if tk.junction == "decision":
+        parts.append("\x1b[4m")
+    return "".join(parts)
+
+
+def legend(opts):
+    if opts.no_color:
+        sw = " ".join(TAG[c] + c for c in CATS)
+        return "attn %s  w=glyph ◆=junction  [%s]" % (sw, DISCLAIMER)
+    bits = []
+    for c in CATS:
+        if _truecolor():
+            r, g, b = FGTRUE[c]
+            bits.append("\x1b[38;2;%d;%d;%dm■\x1b[0m%s" % (r, g, b, c))
+        else:
+            bits.append("\x1b[38;5;%dm■\x1b[0m%s" % (FG256[c], c))
+    return "attn %s  bg=weight ◆=junction  [%s]" % (" ".join(bits), DISCLAIMER)
+
+
+def render_lines(src, toks, opts, weight_of=None, lo=1, hi=None):
+    """Yield rendered lines lo..hi (1-based inclusive) with gutter."""
+    src_lines = src.split("\n")
+    hi = hi if hi is not None else len(src_lines)
+    by_line = {}
+    for tk in toks:
+        by_line.setdefault(tk.line, []).append(tk)
+    for ln in range(lo, min(hi, len(src_lines)) + 1):
+        text = src_lines[ln - 1]
+        row = sorted(by_line.get(ln, []), key=lambda t: t.col)
+        mark = " "
+        if any(t.junction == "decision" for t in row):
+            mark = "◆"
+        elif any(t.junction == "anchor" for t in row):
+            mark = "‣"
+        out = ["%4d %s │ " % (ln, mark)]
+        pos = 0  # 0-based col into text
+        for tk in row:
+            start = tk.col - 1
+            if start > pos:
+                out.append(text[pos:start])
+            w = weight_of(tk) if weight_of else tk.w
+            if opts.no_color:
+                out.append(tk.text + GLYPHS[_bucket(w)])
+                if opts.tags:
+                    out.append(TAG[tk.cat])
+            else:
+                out.append(_sgr_for(tk, opts, w) + tk.text + "\x1b[0m")
+            pos = start + len(tk.text)
+        if pos < len(text):
+            out.append(text[pos:])
+        yield "".join(out)
+
+
+# ---------------------------------------------------------------- sidecar
+def sidecar(mode, source, toks, edges, frames=None):
+    doc = {
+        "version": 1,
+        "heuristic": HEURISTIC,
+        "disclaimer": DISCLAIMER,
+        "source": source,
+        "mode": mode,
+        "generated": datetime.datetime.now(datetime.timezone.utc)
+                     .strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "params": {"tau": TAU, "junction_bonus": [0.8, 0.4], "norm": NORM},
+        "cats": CATS,
+        "tokens": [{"i": tk.i, "line": tk.line, "col": tk.col, "text": tk.text,
+                    "cat": tk.cat, "w": round(tk.w, 3), "depth": tk.depth,
+                    "junction": tk.junction} for tk in toks],
+        "edges": edges,
+    }
+    if frames is not None:
+        doc["frames"] = frames
+    return doc
+
+
+# ---------------------------------------------------------------- mode A
+def cmd_view(opts):
+    with open(opts.file) as f:
+        src = f.read()
+    toks, edges, meta = analyze(src)
+
+    weight_of = None
+    if opts.focus:
+        word = opts.focus.lower()
+        keep = {tk.i for tk in toks if tk.kind == "word" and tk.text.lower() == word}
+        for e in edges:
+            if e["from"] in keep or e["to"] in keep:
+                keep.add(e["from"])
+                keep.add(e["to"])
+        weight_of = lambda tk: tk.w if tk.i in keep else tk.w * 0.15
+
+    out = sys.stdout
+    n = 0
+    leg = legend(opts)
+    for lineout in render_lines(src, toks, opts, weight_of):
+        out.write(lineout + "\n")
+        n += 1
+        if n % 40 == 0:
+            out.write(leg + "\n")  # every viewport carries the disclaimer
+    if n % 40 != 0:
+        out.write(leg + "\n")
+
+    if opts.json:
+        with open(opts.json, "w") as f:
+            json.dump(sidecar("static", opts.file, toks, edges), f, indent=1)
+        sys.stderr.write("attn: sidecar -> %s\n" % opts.json)
+    return 0
+
+
+# ---------------------------------------------------------------- mode B
+def _forth_strings(code):
+    """Parse forth snippet -> ordered [(kind,'pay'|'word', text)]; payloads raw."""
+    items = []
+    i, n = 0, len(code)
+    while i < n:
+        while i < n and code[i].isspace():
+            i += 1
+        if i >= n:
+            break
+        j = i
+        while j < n and not code[j].isspace():
+            j += 1
+        word = code[i:j]
+        i = j
+        if word.lower() in ('s"', '."'):
+            if i < n and code[i].isspace():
+                i += 1
+            q = code.find('"', i)
+            q = n if q < 0 else q
+            items.append(("pay", code[i:q]))
+            i = q + 1
+        else:
+            items.append(("word", word))
+    return items
+
+
+def _frame_events(trace_path):
+    """Extract tool-call frames from a pi session jsonl."""
+    frames = []
+    cwd = None
+    with open(trace_path) as f:
+        for raw in f:
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                entry = json.loads(raw)
+            except ValueError:
+                continue
+            if entry.get("type") == "session":
+                cwd = entry.get("cwd")
+            if entry.get("type") != "message":
+                continue
+            msg = entry.get("message") or {}
+            for item in msg.get("content") or []:
+                if item.get("type") != "toolCall":
+                    continue
+                args = item.get("arguments") or {}
+                code = args.get("code")
+                ev = {"tool": item.get("name", "?"), "ts": entry.get("timestamp"),
+                      "ops": [],
+                      "code": code if isinstance(code, str) else json.dumps(args)}
+                if isinstance(code, str):
+                    pays = []
+                    for kind, text in _forth_strings(code):
+                        if kind == "pay":
+                            pays.append(text)
+                        elif text.lower() == "fwrite" and len(pays) >= 2:
+                            ev["ops"].append(("write", pays[-1], pays[-2]))
+                        elif text.lower() in ("fread", "load") and pays:
+                            ev["ops"].append(("read", pays[-1], None))
+                elif isinstance(args.get("path"), str) or isinstance(args.get("file_path"), str):
+                    p = args.get("path") or args.get("file_path")
+                    c = args.get("content")
+                    ev["ops"].append(("write" if isinstance(c, str) else "read", p, c))
+                    ev["code"] = None
+                frames.append(ev)
+    return frames, cwd
+
+
+def _diff(old, new):
+    """(added, removed, touched_new_lines 1-based)"""
+    a = old.split("\n") if old else []
+    b = new.split("\n")
+    sm = difflib.SequenceMatcher(a=a, b=b, autojunk=False)
+    add = rem = 0
+    touched = []
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag in ("replace", "insert"):
+            add += j2 - j1
+            touched.extend(range(j1 + 1, j2 + 1))
+        if tag in ("replace", "delete"):
+            rem += i2 - i1
+    return add, rem, touched
+
+
+def cmd_session(opts):
+    events, cwd = _frame_events(opts.file)
+    if not events:
+        sys.stderr.write("attn: no tool calls found in %s\n" % opts.file)
+        return 1
+    vfs = {}            # path -> content (virtual, from writes; seeded from disk)
+    last_touch = {}     # (file, line) -> frame idx
+    file_hits = {}      # path -> count (pick sidecar source)
+    frame_records = []
+    out = sys.stdout
+    tty = out.isatty()
+    total = len(events)
+    leg = legend(opts)
+
+    def load(path):
+        if path in vfs:
+            return vfs[path]
+        for base in ([cwd] if cwd else []) + [os.path.dirname(os.path.abspath(opts.file)), "."]:
+            p = os.path.join(base, path)
+            if os.path.isfile(p):
+                with open(p) as f:
+                    vfs[path] = f.read()
+                    return vfs[path]
+        return None
+
+    for idx, ev in enumerate(events):
+        add = rem = 0
+        touched = []
+        fpath = None
+        content = None
+        # apply ALL ops of the call (an fwrite followed by load must not be lost);
+        # display = last write, else last read
+        has_write = any(o == "write" for o, _, _ in ev["ops"])
+        for op, path, payload in ev["ops"]:
+            if op == "write":
+                # diff base: in-session state only — disk holds POST-session
+                # content, diffing against it would fake the chronology
+                old = vfs.get(path, "")
+                a, r, t = _diff(old, payload)
+                vfs[path] = payload
+                for ln in t:
+                    last_touch[(path, ln)] = idx
+                fpath, content, add, rem, touched = path, payload, a, r, t
+            elif not has_write:
+                fpath = path
+                content = load(path)
+        if fpath is None:
+            fpath = "(forth-vm)"
+            content = ev["code"] or ""
+            vfs[fpath] = content
+            touched = list(range(1, content.count("\n") + 2))
+            add = len(touched)
+            for ln in touched:
+                last_touch[(fpath, ln)] = idx
+        if content is None:
+            content = "\\ (file not available: %s)" % fpath
+        ev["file"] = fpath
+        file_hits[fpath] = file_hits.get(fpath, 0) + 1
+
+        toks, edges, meta = analyze(content)
+        recency = {}
+        for (tf, ln), fi in last_touch.items():
+            if tf == fpath:
+                recency[ln] = math.exp(-(idx - fi) / TAU)
+
+        def weight_of(tk, _r=recency):
+            return min(1.0, tk.w + _r.get(tk.line, 0.0) / NORM)
+
+        nlines = content.count("\n") + 1
+        view = 24
+        center = (touched[0] + touched[-1]) // 2 if touched else (view // 2 + 1)
+        lo = max(1, min(center - view // 2, nlines - view + 1))
+        hi = min(nlines, lo + view - 1)
+
+        if tty:
+            out.write("\x1b[2J\x1b[H")
+        else:
+            out.write("--ATTN-FRAME %d--\n" % idx)
+        out.write("┌ frame %03d/%03d  tool=%s  file=%s  Δ+%d/−%d ┐\n"
+                  % (idx, total, ev["tool"], fpath, add, rem))
+        for lineout in render_lines(content, toks, opts, weight_of, lo, hi):
+            out.write(lineout + "\n")
+        out.write("└ %s ┘\n" % leg)
+        out.flush()
+        if tty:
+            time.sleep(1.0 / max(opts.fps, 0.1))
+
+        frame_records.append({
+            "idx": idx, "tool": ev["tool"], "ts": ev["ts"], "file": fpath,
+            "touched_lines": touched,
+            "recency": [[ln, round(r, 3)] for ln, r in sorted(recency.items())
+                        if r > 0.05],
+        })
+
+    if opts.json:
+        source = max(file_hits, key=lambda k: (file_hits[k], k != "(forth-vm)"))
+        content = vfs.get(source) or load(source) or ""
+        toks, edges, _ = analyze(content)
+        with open(opts.json, "w") as f:
+            json.dump(sidecar("session", source, toks, edges, frame_records), f, indent=1)
+        sys.stderr.write("attn: sidecar -> %s\n" % opts.json)
+    return 0
+
+
+# ---------------------------------------------------------------- cli
+def main(argv):
+    ap = argparse.ArgumentParser(
+        prog="attn",
+        description="interpretive attention renderer for forth-forth "
+                    "(%s; weights are a grammar-derived proxy, NOT model internals)"
+                    % HEURISTIC)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    pv = sub.add_parser("view", help="static file heatmap")
+    pv.add_argument("file")
+    pv.add_argument("--focus", help="dim everything not on edges incident to WORD")
+    pv.add_argument("--no-color", action="store_true")
+    pv.add_argument("--tags", action="store_true")
+    pv.add_argument("--json", help="write JSON sidecar")
+    pv.set_defaults(fn=cmd_view)
+
+    for name in ("session", "timeline"):
+        ps = sub.add_parser(name, help="per-tool-call timeline frames")
+        ps.add_argument("file")
+        ps.add_argument("--fps", type=float, default=2.0)
+        ps.add_argument("--no-color", action="store_true")
+        ps.add_argument("--tags", action="store_true")
+        ps.add_argument("--json", help="write JSON sidecar")
+        ps.set_defaults(fn=cmd_session)
+
+    opts = ap.parse_args(argv)
+    return opts.fn(opts)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
