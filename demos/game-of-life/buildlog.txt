@@ -1,0 +1,40 @@
+mkdir -p build
+../../engine/agent classify goal.md > build/effort.json
+jq -e '(.tier|IN("vague","standard","prd")) and (.fanout|test("^[0-9]+-[0-9]+$")) and (.review_depth|IN("smoke","standard","full")) and (.model_hint|IN("small","default","large")) and (.thinking|IN("off","low","medium","high"))' build/effort.json > /dev/null   # gate: schema
+../../engine/agent plan goal.md > build/plan.json
+jq -e '.components | length > 0' build/plan.json > /dev/null   # gate: valid decomposition
+jq -r '.components[] | "build/\(.id).done: build/plan.json \(.deps | map("build/\(.).done") | join(" "))\n\t$(AGENT) build \(.id)\n\tbash src/\(.id)/check.sh\n\ttouch $@\nCOMPONENTS += build/\(.id).done\n"' build/plan.json > build/components.mk
+../../engine/agent build life-engine
+Done. Files under `src/life-engine/`:
+
+- `engine.js` — ES module, pure functions: `createGrid`, `get`/`set` (toroidal), `neighbors`, `step` (B3/S23, returns new grid), `randomize`, `population` (last two for siblings' seed/stagnation needs).
+- `test.mjs` — asserts blinker period-2 oscillation, glider (+1,+1) after 4 steps, wrap-around birth.
+- `check.sh` — runs test, exits 0. Verified passing.
+bash src/life-engine/check.sh
+life-engine: all tests pass
+touch build/life-engine.done
+../../engine/agent build canvas-renderer
+Done.
+
+- `src/canvas-renderer/renderer.js` — `createAges`/`updateAges` (Float32 age buffer, GROW 0.35 on alive, FADE 0.15 on dead), `ageToColor` (age→green/teal rgba, null skips draw), `render` (bg fill + padded cell rects).
+- `src/canvas-renderer/test.mjs` — stub 2D ctx, asserts growth/cap/decay/clamp, exact color strings, 2 fillRect calls at right offset.
+- `src/canvas-renderer/check.sh` — passes.
+
+ponytail: colors computed per-cell each frame; fine at MVP grid sizes, precompute a 256-entry LUT if profiling ever complains.
+bash src/canvas-renderer/check.sh
+canvas-renderer: all checks passed
+touch build/canvas-renderer.done
+../../engine/agent build animation-app
+Done. Files in `src/animation-app/`:
+
+- `app.js` — DOM-free loop logic: `createApp` (random soup seed), `tick` (step + age fade + stagnation counter, reseed after 30 unchanged-pop ticks or extinction), `advance` (accumulator, 100ms/tick = ~10 gen/s, clamps tab-away spikes).
+- `index.html` — canvas sized to viewport, rAF at display rate calling `advance` + `render` (60fps draw, fades interpolate via renderer ages).
+- `test.mjs` — 100 headless ticks assert generation=100; `advance(500ms)` = 5 ticks; block still-life triggers reseed.
+- `check.sh` — runs `node test.mjs`, passes.
+
+ponytail: reseed detection is exact-population-equality; misses period-2 oscillator soups with alternating pop. Upgrade path: hash last N populations or grid checksum.
+bash src/animation-app/check.sh
+animation-app: all tests passed
+touch build/animation-app.done
+../../engine/agent review > build/report.md
+grep -q 'VERDICT: PASS' build/report.md

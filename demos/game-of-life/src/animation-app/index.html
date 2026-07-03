@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Game of Life — alive</title>
+<style>
+  html,body { margin:0; background:#0a0f14; height:100%; display:grid; place-items:center; }
+  canvas { image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="module">
+import { createApp, advance } from "./app.js";
+import { render } from "../canvas-renderer/renderer.js";
+
+const CELL = 8;
+const W = Math.floor(Math.min(innerWidth, 1200) / CELL);
+const H = Math.floor(Math.min(innerHeight, 800) / CELL);
+const canvas = document.getElementById("c");
+canvas.width = W * CELL;
+canvas.height = H * CELL;
+const ctx = canvas.getContext("2d");
+
+const app = createApp(W, H);
+let last = performance.now();
+function frame(now) {
+  advance(app, now - last);
+  last = now;
+  render(ctx, app.grid, app.ages, CELL);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
