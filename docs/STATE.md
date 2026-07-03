@@ -1,6 +1,7 @@
 # STATE — repo snapshot for the iterate-until-viral loop
 
-Last updated: 2026-07-04 @ fixer round 2 (id trust-boundary gate + doc sync).
+Last updated: 2026-07-04 @ nested-decomposition synthesis (judge rounds closed,
+follow-ups filed TASK-17/18/19).
 Working tree clean, all selftests re-run green at write time
 (`wfcheck-selftest` 28/28 incl. nested breaks, `nested-selftest` full matrix
 incl. id-gate negatives, `apieval-selftest` incl. TOON round-trip,
@@ -24,7 +25,48 @@ Link audit across README + docs: 0 dead links.
 | Dogfood narrative | [`docs/dogfood-autopsy.md`](dogfood-autopsy.md) + committed mess dirs (`dogfood-*/`) + README "Eating the dogfood" | STEERING arc complete |
 | Secret protection | psst + gitleaks `[[allowlists]]`, tracked `.githooks/pre-commit` | live-tested: staged AKIA/ghp tokens → commit blocked |
 | Media | `media/`: engine-run cast+gif, per-demo gifs, gallery.png | real, unedited runs |
-| Backlog | 13 To Do / 3 Done — the roadmap IS the board, any item is one `make board-next` away | `backlog board` |
+| Backlog | 16 To Do / 3 Done — the roadmap IS the board, any item is one `make board-next` away | `backlog board` |
+
+## Nested decomposition (TASK-11, Done)
+
+**Design chosen: A — recursive make** (`docs/rfc-nested.md`, adjudicated duel
+vs. B flatten-at-generate; A won despite losing 4/6 criteria). Why: the one
+criterion the mission exists for is **lazy planning** — a subtree is planned
+at build time, *after* its dependencies exist, so reality informs the plan.
+B replaces one blind upfront plan with N blind upfront plans (same failure
+mode, more calls); B's own rejected variant B2 proved lazy planning is
+structurally impossible inside a single make instance. Two grafts from B
+close A's worst cons: MAXTIER clamp (subtree classify ≤ parent tier) and
+per-level MAXFANOUT gate.
+
+**Deterministic bounds, all jq/make — never prompt trust:** `AGENTMAKE_MAXDEPTH`
+(default 3; at cap the jq template emits the leaf branch, composites
+impossible), `MAXTIER` whole-row clamp, `MAXFANOUT` 8/level
+(tree ≤ MAXFANOUT^MAXDEPTH), id/dep charset allowlist
+(`^[a-z0-9][a-z0-9-]{0,63}$` — plan ids splice into make+shell, trust
+boundary, enforced at plan gate AND `engine/subtree`).
+
+**Verification ladder:** mock-first zero-LLM e2e
+(`engine/fixtures/nested-selftest.sh`: tree build, order, idempotence, deep
+resume, failure bubble+resume, depth cap, fanout gate, tier clamp, tooling
+recursion, id-gate negatives) → live real PRD (site-forge: planner marked
+`plugin-subsystem` composite on FIRST call, subtree self-planned 5
+components, zero gate failures) → judge torture fixtures (jobserver -j4
+sustained 4-concurrent with real cross-subtree interleave via `+$(MAKE)`
+MAKEFLAGS inheritance; resume-at-depth = exactly 1 rebuild, siblings
+mtime-identical; MAXDEPTH cap verified in generated makefile text).
+
+**Judge scores (2 rounds each):** make-correctness PASS (all criteria on
+judge-built fixtures), trajectory-fitness PASS (boundary sensible, lazy
+sub-planning verified in buildlog order), docs+hygiene **10/10**. Round-1
+criticals fixed: id charset trust boundary (`d9e190e`), spec/impl doc drift
+(`5e5c07e`).
+
+**New ceilings surfaced (filed):** no mid-flight re-planning — plan.json
+frozen once written, wrong decomposition needs human `rm` (→ TASK-17);
+no whole-tree leaf census — composite counts as 1 at parent (→ TASK-18);
+cross-subtree dep edges inexpressible + copy-based sibling integration
+(→ TASK-19, absorbs old ceiling #3).
 
 ## Demos (all built by the engine from the committed goal file, unedited)
 
@@ -60,13 +102,22 @@ Link audit across README + docs: 0 dead links.
 
 1. **No feedback on retry** — failed gate deletes artifact, rerun fires a fresh agent with no memory. Biggest quality ceiling. → TASK-10
 2. **HITL designed, not default** — `.ok` layer is a one-line jq change away. → TASK-2
-3. **Copy-based sibling integration** — nested decomposition landed (TASK-11 Done: depth ≤ 3, fan-out ≤ 8/level, tier clamp), but siblings integrate by copying files per description contract; no shared artifact store, one real-PRD composite datapoint (site-forge).
+3. **Copy-based sibling integration + cross-subtree deps** — siblings
+   integrate by copying files per description contract (no shared artifact
+   store, drift possible); a leaf in subtree X cannot depend on a leaf in
+   subtree Y, only whole-composite ordering. One real-PRD composite
+   datapoint (site-forge). → TASK-19
 4. **Tool-less planner roleplay** — hallucinated tool-call transcripts before JSON (observed on self-host, gate rejected twice, retries cost money). → TASK-15
 5. **Self-seeded goldens** — evalshot/apieval bootstrap golden from current output (loud NOTE, human must eyeball). twitter-x ssim=1.0 golden is self-bootstrapped; independent `checkpixels` asserts keep it honest. → TASK-4
 6. **claude runtime unverified e2e** — plumbing complete, blocked on creds (environmental). → TASK-16
 7. **Nondeterministic plans** — gates hold, but `build/` not bit-reproducible; matrix numbers single-run.
 8. **snap boots a browser per shot** (~190 ms) — CDP-pool upgrade specced in [BENCH.md](../evals/docs/BENCH.md), not built. → TASK-6
 9. **Cost** — small-CLI matrix goal $0.27–$1.97/run; PRD tier = 7+ sessions. → TASK-12
+10. **No mid-flight re-planning** — plan.json is written once per (sub)tree,
+    never revisited; a wrong decomposition can only be fixed by a human
+    deleting the plan. Long-trajectory version of ceiling #1. → TASK-17
+11. **No whole-tree census** — progress recurses per level but a composite
+    counts as 1 at its parent; no single truthful leaf count. → TASK-18
 
 ## Iteration hooks — "do until viral" loop
 
@@ -76,9 +127,14 @@ Suggested pull order for viral impact:
 1. **TASK-13 Viral packaging (clone-and-run)** — the last mile: no-API-key demo path (stub agent / committed artifacts), one-command experience for a stranger. README hook + gifs already exist; this closes clone → wow in <60s.
 2. **TASK-10 Retry-with-feedback** — pipe gate output into the retry agent's prompt. Attacks ceiling #1; directly raises matrix scores (haiku/sonnet died on gates that feedback would fix).
 3. **TASK-2 HITL approvals default** — flips the documented design live; makes the "approval is a file" demo-able, which is the most tweetable primitive here.
-4. TASK-15 planner JSON hardening (kills the observed 2-retry tax) → TASK-9 classifier tuning.
-5. TASK-7 ffmpeg contact-sheet + diff-video — iteration-visible-as-media, feeds the viral loop's content engine.
-6. TASK-6 CDP pool, TASK-8 TUI eval pack, TASK-12 cost accounting, TASK-4 evalgen — depth, pull as needed. (TASK-11 nested decomposition: Done.)
+4. **TASK-17 Mid-flight re-planning** — nested round's top surfaced ceiling;
+   pairs with TASK-10 (per-leaf feedback vs. per-plan feedback), together they
+   close the "long trajectory adapts to reality" story the mission targets.
+5. TASK-15 planner JSON hardening (kills the observed 2-retry tax) → TASK-9 classifier tuning.
+6. TASK-7 ffmpeg contact-sheet + diff-video — iteration-visible-as-media, feeds the viral loop's content engine.
+7. TASK-18 whole-tree census, TASK-19 cross-subtree deps/artifact store —
+   nested depth, pull after a second real-PRD composite datapoint exists.
+8. TASK-6 CDP pool, TASK-8 TUI eval pack, TASK-12 cost accounting, TASK-4 evalgen — depth, pull as needed. (TASK-11 nested decomposition: Done.)
 
 Loop protocol with user: pick hook → `make board-task TASK=…` (or hand-build) →
 gates green → update this file's scores/ceilings → re-judge → repeat.

@@ -4,7 +4,7 @@ title: Nested decomposition via recursive make
 status: Done
 assignee: []
 created_date: '2026-07-03 18:11'
-updated_date: '2026-07-03 21:52'
+updated_date: '2026-07-03 22:21'
 labels:
   - idea
 dependencies: []
@@ -31,6 +31,8 @@ Components can decompose further: recursive $(MAKE) per subtree. Ceiling noted i
 Shipped across 3 commits: 641c274 (engine: composite kind + sub_goal, engine/subtree scaffold, +$(MAKE) -C recursion, AGENTMAKE_MAXDEPTH=3 / MAXTIER clamp / MAXFANOUT=8 as jq/make gates, mock-agent e2e with zero LLM calls), 258211c (progress per-level bars, graph mermaid subgraphs, wfcheck subtree recursion without score dilution, selftest nested fixtures, engine-internals doc), 1fefb74 (demos/site-forge: real 6.2KB PRD — planner marked plugin-subsystem composite on first call, subtree self-planned 5 components, wfcheck parent 29/29 + subtree 24/24, zero gate failures). Design doc: docs/rfc-nested.md. README front door updated in 8e949f5.
 
 Validation rerun at finalization: nested-selftest PASS (tree build, order, idempotence, deep resume, bubble+resume, depth cap, fanout gate, tier clamp, wfcheck/progress/graph recursion); wfcheck-selftest 28/28 incl. nested-subtree break detection; apieval-selftest PASS; selfcheck-classify PASS; flat regression wfcheck demos/game-of-life 16/16; nested wfcheck demos/site-forge 29/29 (subtree 24/24 via drill-down).
+
+Judge round (3 judges: make-correctness, trajectory-fitness, docs+hygiene): 2 rounds each. Round-1 criticals fixed in d9e190e (id charset allowlist ^[a-z0-9][a-z0-9-]{0,63}$ at plan gate + engine/subtree — plan ids splice into make+shell, trust boundary, not style) and 5e5c07e (spec/impl code-block sync + line-count staleness). Re-judge: make-correctness PASS on judge-built fixtures (jobserver -j4 real cross-subtree interleave, resume-at-depth exactly-1-rebuild, MAXDEPTH cap enforced in generated makefile text); trajectory-fitness PASS (composite boundary sensible, lazy sub-planning verified in buildlog order); docs+hygiene 10/10. Follow-ups filed: TASK-17 (mid-flight re-planning), TASK-18 (whole-tree census), TASK-19 (cross-subtree deps + artifact store).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
