@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# evalshot — screenshot golden eval via ffmpeg SSIM.
+# usage: evalshot <shot.png> <golden.png> [threshold]   (default 0.97)
+# exit 0 = pass (or golden bootstrapped on first run), 1 = fail, 2 = usage/env error.
+# On fail writes <shot>.diff.png (pixel-difference blend) for visual inspection.
+set -euo pipefail
+
+usage() { echo "usage: evalshot <shot.png> <golden.png> [threshold=0.97]" >&2; exit 2; }
+[ $# -ge 2 ] && [ $# -le 3 ] || usage
+shot=$1 golden=$2 thr=${3:-0.97}
+
+command -v ffmpeg  >/dev/null || { echo "evalshot: ffmpeg not found"  >&2; exit 2; }
+command -v ffprobe >/dev/null || { echo "evalshot: ffprobe not found" >&2; exit 2; }
+[ -f "$shot" ] || { echo "evalshot: shot not found: $shot" >&2; exit 2; }
+awk -v t="$thr" 'BEGIN{ if (t+0 != t || t < 0 || t > 1) exit 1 }' \
+  || { echo "evalshot: threshold must be numeric in 0..1, got: $thr" >&2; exit 2; }
+
+# ── first run: bootstrap golden from shot, loud note, auto-pass
+if [ ! -f "$golden" ]; then
+  mkdir -p "$(dirname "$golden")"
+  cp "$shot" "$golden"
+  cat >&2 <<EOF
+##################################################################
+# NOTE: GOLDEN BOOTSTRAPPED — did not exist, copied current shot #
+#   golden: $golden
+# This run auto-PASSES. Review image manually, then commit it.   #
+# If shot was wrong: rm golden, fix render, rerun to re-bootstrap.
+##################################################################
+EOF
+  exit 0
+fi
+
+# ── dims must match: ffmpeg ssim errors opaquely otherwise
+dims() { ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$1"; }
+d_shot=$(dims "$shot"); d_gold=$(dims "$golden")
+if [ "$d_shot" != "$d_gold" ]; then
+  echo "evalshot: FAIL dimension mismatch shot=$d_shot golden=$d_gold (fix viewport — do NOT rescale to pass)" >&2
+  exit 1
+fi
+
+# ── SSIM: parse 'All:0.xxxxxx' from stderr of the ssim filter
+ssim=$(ffmpeg -hide_banner -i "$shot" -i "$golden" -lavfi ssim -f null - 2>&1 \
+       | sed -n 's/.*All:\([0-9][0-9.]*\).*/\1/p' | tail -1)
+[ -n "$ssim" ] || { echo "evalshot: could not parse SSIM from ffmpeg output" >&2; exit 2; }
+
+if awk -v s="$ssim" -v t="$thr" 'BEGIN{ exit !(s >= t) }'; then
+  echo "evalshot: PASS ssim=$ssim >= $thr  ($shot vs $golden)"
+  exit 0
+else
+  diffimg="${shot%.*}.diff.png"
+  ffmpeg -hide_banner -loglevel error -y -i "$shot" -i "$golden" \
+    -filter_complex 'blend=all_mode=difference' -frames:v 1 "$diffimg" 2>/dev/null || true
+  echo "evalshot: FAIL ssim=$ssim < $thr  ($shot vs $golden)" >&2
+  [ -f "$diffimg" ] && echo "evalshot: diff image: $diffimg (bright pixels = mismatch)" >&2
+  exit 1
+fi

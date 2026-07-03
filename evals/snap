@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# snap <url-or-file> <out.png> [width height]  — html -> lowres PNG, fastest local path
+# strategy: playwright-cached chrome-headless-shell one-shot (~190ms warm),
+#           fallback full Chrome (~2.2s). See BENCH.md. Upgrade path: persistent CDP pool (25ms/shot).
+set -euo pipefail
+
+usage() { echo "usage: snap <url-or-file> <out.png> [width height]  (default 480 640)" >&2; exit 2; }
+[ $# -ge 2 ] || usage
+SRC=$1; OUT=$2; W=${3:-480}; H=${4:-640}
+
+# validate dims (trust boundary: goes into CLI flag)
+case "$W$H" in *[!0-9]*) echo "snap: width/height must be integers" >&2; exit 2;; esac
+
+# url-or-file -> URL
+case "$SRC" in
+  http://*|https://*|file://*) URL=$SRC ;;
+  *) [ -f "$SRC" ] || { echo "snap: no such file: $SRC" >&2; exit 1; }
+     URL="file://$(cd "$(dirname "$SRC")" && pwd)/$(basename "$SRC")" ;;
+esac
+
+# pick renderer: newest cached chrome-headless-shell > full Chrome
+BIN=""
+for d in "$HOME"/Library/Caches/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-mac-*/chrome-headless-shell; do
+  [ -x "$d" ] && BIN=$d   # glob sorts ascending -> ends on newest
+done
+if [ -z "$BIN" ]; then
+  C="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  [ -x "$C" ] && BIN=$C
+fi
+[ -n "$BIN" ] || { echo "snap: no chrome-headless-shell or Chrome found" >&2; exit 1; }
+
+"$BIN" --headless --disable-gpu --hide-scrollbars \
+  --window-size="$W,$H" --screenshot="$OUT" "$URL" >/dev/null 2>&1
+
+# gate: PNG exists + non-empty (this is the whole point of an eval gate)
+[ -s "$OUT" ] || { echo "snap: screenshot failed: $OUT empty/missing" >&2; exit 1; }
