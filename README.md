@@ -36,8 +36,32 @@ TODO: clone-and-run instructions (see backlog: viral packaging)
 
 | Demo | Goal | Result |
 |------|------|--------|
-| _coming soon_ | | |
+| [game-of-life](demos/game-of-life/) | "game of life, make it look alive" (vague tier) | canvas GoL with age-fade trails, screenshot golden gate |
+| [tui-habits](demos/tui-habits/) | terminal habit tracker (standard tier) | curses TUI, tmux capture-pane goldens |
+| [desk-dashboard](demos/desk-dashboard/) | clock/weather/todo dashboard (vague tier) | live panels, 2 fix-forward loops |
+| [twitter-x](demos/twitter-x/) | X clone PRD (prd tier) | 3 backends + round-robin LB + WAL sqlite, built `-j2` |
+| [forth-forth](demos/forth-forth/) | Forth compiler in Forth (prd tier) | staged bootstrap, selfhost fixed point |
 
 ## Media
 
-_screenshots / gifs / diff-videos coming — see `media/`_
+### The engine, live
+
+Real unedited rebuild of `demos/game-of-life` — `make clean && make -j2`, agents plan,
+build, check, review; then `make progress` + `make graph`. Idle time capped at 2s
+(`asciinema rec -i 2`), so agent thinking pauses are compressed, nothing else is.
+Cast file: [`media/engine-run.cast`](media/engine-run.cast).
+
+![engine run](media/engine-run.gif)
+
+### What it builds
+
+| | |
+|---|---|
+| **game-of-life** — successive generations from the deterministic eval harness (`eval.html?t=40..51`, seeded PRNG) | ![game of life](media/game-of-life.gif) |
+| **twitter-x** — live 3-backend stack behind the round-robin proxy; tweets POSTed via `curl` between screenshots | ![twitter-x](media/twitter-x.gif) |
+| **desk-dashboard** — live page screenshots: clock ticking, real open-meteo fetch | ![desk dashboard](media/desk-dashboard.gif) |
+| **tui-habits** — real `tmux capture-pane` output, re-rendered for the gif | ![tui habits](media/tui-habits.gif) |
+
+### Gallery
+
+![gallery](media/gallery.png)
