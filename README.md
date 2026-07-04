@@ -18,6 +18,46 @@ classify → plan → three build agents → review gate, then `make progress` a
 pauses are compressed; nothing else is. Cast file:
 [`media/engine-run.cast`](media/engine-run.cast).*
 
+## One command: `cook`
+
+```sh
+bin/cook "an extension that makes all websites pink"
+```
+
+No Makefile authoring, no goal file editing — say the thing, get software.
+`cook` slugs your sentence into a project dir under cwd, writes `goal.md`
+verbatim, drops the 3-line Makefile, and runs the full pipeline with a live
+progress bar; it exits with the artifact paths and the run's
+[wfcheck](evals/wfcheck) score. No API key? `bin/cook --runtime mock "..."`
+is the same one-shot on the deterministic mock agent.
+
+```
+ ✓ classify   tier=vague
+ ✓ plan       3 components
+ ✓ pink-css
+ ✓ manifest
+ · extension-app
+ · review
+[################--------] 4/6 (66%)
+```
+
+| | |
+|---|---|
+| `--dry` | classify + plan only — prints the component tree and the cost posture (2 agent calls, zero builds) |
+| `--tier vague\|standard\|prd` | override the classifier — the budget dial, by hand |
+| `--runtime cli\|sdk\|mock` | agent harness; `mock` runs the whole pipeline with zero LLM calls |
+| `--board` | don't build now — file the goal as a Backlog.md task (`make board-task` later) |
+| `--resume <dir>` | continue a stopped or failed run exactly where it left off (plain `make` resume) |
+| `--dir`, `--jobs` | project dir override; `-j` fan-out (default 2) |
+| `cook progress <dir>`, `cook graph <dir>` | census bar / mermaid DAG passthroughs |
+
+The goal text is a trust boundary: it lands in `goal.md` verbatim and
+nowhere else — the directory name is derived through a `[a-z0-9-]` charset
+gate, and nothing from the sentence is ever interpolated into the Makefile
+or a shell line. Self-checks (mock runtime, includes an injection attempt):
+[`bin/selfcheck-cook.sh`](bin/selfcheck-cook.sh). `cook` is orchestration
+only — everything below it is the same engine you can drive by hand.
+
 ## 60-second quickstart
 
 No API key, no LLM, no config — just `make` and `jq`:
@@ -46,7 +86,8 @@ Real agents, real gates, ends with the artifact census and the dependency
 graph. Pick a bigger one with `make demo DEMO=twitter-x`. The gif above *is*
 that run.
 
-Your own project is a folder with two files:
+Your own project is a folder with two files — `cook` writes both for you,
+or by hand:
 
 ```sh
 mkdir my-thing && cd my-thing

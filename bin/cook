@@ -1,0 +1,220 @@
+#!/usr/bin/env bash
+# cook — one-shot natural-language CLI over the agentmake engine.
+#
+#   cook "an extension that makes all websites pink"
+#
+# Sentence in, software out: slugs the goal into a project dir under cwd,
+# writes goal.md VERBATIM, drops the 3-line Makefile, runs the full pipeline
+# (classify → plan → build agents → review) with a live progress bar, exits
+# with artifact paths + the run's wfcheck score.
+#
+# Orchestration only — zero new engine logic. Everything shells to
+# engine/build.mk targets and evals/wfcheck; resume is plain `make` resume.
+#
+# Trust boundary: the goal text. It lands in goal.md verbatim and NOWHERE
+# else — dir name goes through a [a-z0-9-] charset gate, and no part of the
+# sentence is ever interpolated into the Makefile or a shell line.
+# Self-checks: bin/selfcheck-cook.sh (mock runtime, includes injection attempt).
+set -euo pipefail
+
+self=${BASH_SOURCE[0]}
+while [ -L "$self" ]; do  # follow symlink installs (relative links included)
+  t=$(readlink "$self")
+  case $t in /*) self=$t ;; *) self=$(dirname "$self")/$t ;; esac
+done
+ROOT=$(cd "$(dirname "$self")/.." && pwd)
+
+die() { echo "cook: $*" >&2; exit 2; }
+
+usage() {
+  cat <<'EOF'
+usage: cook "goal text" [flags]         one-shot: scaffold + full pipeline
+       cook --resume [dir]              continue a stopped run where it left off
+       cook progress [dir]              census bar for a run dir
+       cook graph [dir]                 mermaid DAG for a run dir
+
+flags:
+  --dir DIR       project dir (default: ./<slug-of-goal>)
+  --dry           classify + plan only; print component tree + cost posture
+  --tier T        override the classifier: vague | standard | prd
+  --runtime R     cli (default) | sdk | mock   (mock = zero LLM calls)
+  --board         don't build: file the goal as a Backlog.md task instead
+  --jobs N        make -jN fan-out (default 2)
+EOF
+}
+
+# ── passthroughs (read-only engine targets)
+case ${1:-} in
+  progress|graph) exec make -s -C "${2:-.}" "$1" ;;
+  -h|--help) usage; exit 0 ;;
+  '') usage; exit 2 ;;
+esac
+
+# ── flag parsing (goal text stays an opaque string from here on)
+GOAL='' DIR='' DRY=0 TIER='' RT=cli BOARD=0 RESUME=0 JOBS=2
+while [ $# -gt 0 ]; do
+  case $1 in
+    --dir)     [ $# -ge 2 ] || die "--dir needs a value"; DIR=$2; shift 2 ;;
+    --dry)     DRY=1; shift ;;
+    --tier)    [ $# -ge 2 ] || die "--tier needs a value"; TIER=$2; shift 2 ;;
+    --runtime) [ $# -ge 2 ] || die "--runtime needs a value"; RT=$2; shift 2 ;;
+    --board)   BOARD=1; shift ;;
+    --resume)  RESUME=1; shift ;;
+    --jobs|-j) [ $# -ge 2 ] || die "--jobs needs a value"; JOBS=$2; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    --*)       die "unknown flag: $1" ;;
+    *)         [ -z "$GOAL" ] || die "one goal argument only — quote the sentence"
+               GOAL=$1; shift ;;
+  esac
+done
+
+# flag validation (flags are operator input, still gated: they reach make lines)
+case $RT in cli|sdk|mock) ;; *) die "--runtime must be cli|sdk|mock, got: $RT" ;; esac
+[ -z "$TIER" ] || case $TIER in vague|standard|prd) ;; *) die "--tier must be vague|standard|prd, got: $TIER" ;; esac
+case $JOBS in ''|*[!0-9]*) die "--jobs must be a number, got: $JOBS" ;; esac
+
+slugify() {  # goal text -> dir-safe [a-z0-9-]; the charset gate IS the injection gate
+  local s
+  s=$(printf '%s' "$1" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C tr -c 'a-z0-9' '-' | LC_ALL=C tr -s '-')
+  s=${s#-}; s=${s%-}; s=${s:0:48}; s=${s%-}
+  printf '%s' "$s"
+}
+
+tier_row() {  # canonical knob rows — same table as engine/agent classify
+  case $1 in
+    vague)    echo '{"tier":"vague","fanout":"2-3","review_depth":"smoke","model_hint":"small","thinking":"low"}' ;;
+    standard) echo '{"tier":"standard","fanout":"3-5","review_depth":"standard","model_hint":"default","thinking":"medium"}' ;;
+    prd)      echo '{"tier":"prd","fanout":"5-8","review_depth":"full","model_hint":"large","thinking":"high"}' ;;
+  esac
+}
+
+# ── --board: "later" — file the goal on the Backlog.md board instead of building
+if [ "$BOARD" = 1 ]; then
+  [ -n "$GOAL" ] || die "--board needs a goal argument"
+  command -v backlog >/dev/null || die "backlog CLI not found (--board needs it)"
+  backlog instructions overview >/dev/null  # board contract: overview before any task op
+  title=$(printf '%s' "$GOAL" | head -n1 | cut -c1-72)
+  out=$(backlog task create "$title" -d "$GOAL" -l cook --plain)
+  printf '%s\n' "$out"
+  id=$(printf '%s\n' "$out" | grep -oE '[A-Za-z]+-[0-9]+' | head -1)
+  echo "cook: filed ${id:-task} — build it later: make board-task TASK=${id:-<id>}"
+  exit 0
+fi
+
+# ── resolve run dir
+if [ "$RESUME" = 1 ]; then
+  [ -n "$DIR" ] || DIR=${GOAL:-.}   # --resume takes the positional as a DIR
+  GOAL=''
+  [ -f "$DIR/Makefile" ] && [ -f "$DIR/goal.md" ] || die "not a run dir (need Makefile + goal.md): $DIR"
+  echo "cook: resuming $DIR — $(head -n1 "$DIR/goal.md")"
+else
+  [ -n "$GOAL" ] || die 'no goal — cook "a sentence describing the software"'
+  if [ -z "$DIR" ]; then
+    slug=$(slugify "$GOAL")
+    [[ $slug =~ ^[a-z0-9][a-z0-9-]{0,63}$ ]] || die "goal yields no usable slug — pass --dir"
+    DIR=./$slug
+  fi
+  if [ -f "$DIR/goal.md" ]; then
+    if printf '%s\n' "$GOAL" | cmp -s - "$DIR/goal.md"; then
+      echo "cook: same goal already in $DIR — resuming (make picks up where it stopped)"
+    else
+      die "$DIR exists with a DIFFERENT goal — pick another --dir or remove it"
+    fi
+  elif [ -d "$DIR" ] && [ -n "$(ls -A "$DIR" 2>/dev/null)" ]; then
+    die "$DIR exists and is not a cook run dir — refusing to write into it"
+  else
+    mkdir -p -- "$DIR"
+    printf '%s\n' "$GOAL" > "$DIR/goal.md"   # verbatim — never interpolated anywhere
+  fi
+  # the 3-line Makefile ($ROOT is filesystem-derived, no user input)
+  # ponytail: absolute engine path — run dir isn't relocatable; upgrade = --relative flag
+  [ -f "$DIR/Makefile" ] || printf '# cooked by agentmake\nGOAL ?= goal.md\ninclude %s/engine/build.mk\n' "$ROOT" > "$DIR/Makefile"
+fi
+
+mkdir -p "$DIR/build"
+if [ -n "$TIER" ]; then
+  tier_row "$TIER" > "$DIR/build/effort.json"   # newer than goal.md -> classify skipped
+  echo "cook: classifier overridden — tier=$TIER"
+fi
+
+# ── runtime wiring: mock swaps the whole agent adapter; cli/sdk ride the env
+MK=(make -C "$DIR")
+case $RT in
+  mock)    MK+=(AGENT="$ROOT/engine/fixtures/mock-agent") ;;
+  cli|sdk) export RUNTIME=$RT ;;
+esac
+LOG=$DIR/build/cook.log
+
+# ── --dry: classify + plan, then show what a full run would spend
+if [ "$DRY" = 1 ]; then
+  "${MK[@]}" -s build/plan.json >"$LOG" 2>&1 || { echo "cook: classify/plan failed — log tail:" >&2; tail -n 25 "$LOG" >&2; exit 1; }
+  eff=$DIR/build/effort.json plan=$DIR/build/plan.json
+  n=$(jq '.components|length' "$plan")
+  echo "cook --dry: $DIR (no build agents fired)"
+  echo "posture: tier=$(jq -r .tier "$eff")  fanout=$(jq -r .fanout "$eff")  model=$(jq -r .model_hint "$eff")  thinking=$(jq -r .thinking "$eff")  review=$(jq -r .review_depth "$eff")"
+  echo "cost:    2 agent calls spent (classify+plan); full run adds $n build + 1 review"
+  echo "plan:"
+  jq -r '.components[] | "  " + .id
+         + (if (.kind//"leaf")=="composite" then "  [composite -> own subtree]" else "" end)
+         + (if (.deps|length)>0 then "   <- " + (.deps|join(", ")) else "" end)' "$plan"
+  echo "build it: cook --resume $DIR"
+  exit 0
+fi
+
+# ── live progress: filesystem census (same shape as `make progress`) — no
+# make-in-make while the pipeline holds build/, so no components.mk write race
+LAST=0 PREV=''
+draw() {
+  local b="$DIR/build" rows done=0 total=3 ids='' id n pct bar=''
+  if [ -s "$b/effort.json" ]; then
+    rows=" ✓ classify   tier=$(jq -r .tier "$b/effort.json" 2>/dev/null || echo '?')"; done=1
+  else
+    rows=" · classify"
+  fi
+  [ -s "$b/plan.json" ] && ids=$(jq -r '.components[].id' "$b/plan.json" 2>/dev/null || true)
+  if [ -n "$ids" ]; then
+    n=$(printf '%s\n' "$ids" | wc -l | tr -d ' ')
+    rows=$rows$'\n'" ✓ plan       $n components"; done=$((done+1)); total=$((n+3))
+    for id in $ids; do   # ids charset-gated by the plan gate — safe to word-split
+      if [ -f "$b/$id.done" ]; then rows=$rows$'\n'" ✓ $id"; done=$((done+1))
+      else rows=$rows$'\n'" · $id"; fi
+    done
+  else
+    rows=$rows$'\n'" · plan"
+  fi
+  if [ -f "$b/report.md" ]; then rows=$rows$'\n'" ✓ review"; done=$((done+1))
+  else rows=$rows$'\n'" · review"; fi
+  pct=$((done*100/total)); n=$((done*24/total))
+  [ "$n" -gt 0 ] && bar=$(printf '#%.0s' $(seq 1 $n))
+  rows=$rows$'\n'$(printf '[%-24s] %d/%d (%d%%)' "$bar" "$done" "$total" "$pct")
+  if [ -t 1 ]; then
+    [ "$LAST" -gt 0 ] && printf '\033[%dA\033[J' "$LAST"
+    printf '%s\n' "$rows"
+    LAST=$(printf '%s\n' "$rows" | wc -l | tr -d ' ')
+  elif [ "$rows" != "$PREV" ]; then
+    printf '%s\n' "$rows" ''; PREV=$rows
+  fi
+}
+
+echo "cook: $DIR  (runtime=$RT, -j$JOBS)  log: $LOG"
+"${MK[@]}" -j"$JOBS" all >"$LOG" 2>&1 &
+MPID=$!
+trap 'kill "$MPID" 2>/dev/null; echo "cook: interrupted — resume: cook --resume $DIR" >&2; exit 130' INT TERM
+while kill -0 "$MPID" 2>/dev/null; do draw; sleep 1; done
+if wait "$MPID"; then st=0; else st=$?; fi
+trap - INT TERM
+draw
+if [ "$st" -ne 0 ]; then
+  echo "cook: pipeline failed (exit $st) — log tail:" >&2
+  tail -n 25 "$LOG" >&2
+  echo "cook: fix nothing, rerun: cook --resume $DIR  (gates deleted the bad artifact; make resumes)" >&2
+  exit "$st"
+fi
+
+# ── done: artifact census + mechanical score
+echo "cooked -> $DIR"
+echo "  $DIR/goal.md"
+echo "  $DIR/build/plan.json"
+echo "  $DIR/build/report.md ($(grep -o 'VERDICT: [A-Z]*' "$DIR/build/report.md" | head -1))"
+for d in "$DIR"/src/*/; do [ -d "$d" ] && echo "  $d"; done
+"$ROOT/evals/wfcheck" "$DIR"   # prints score line, writes build/wfscore.json; exit = verdict
