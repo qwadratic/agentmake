@@ -20,6 +20,8 @@ pauses are compressed; nothing else is. Cast file:
 
 ## One command: `cook`
 
+One repo, two names: `agentmake` is the engine you clone, `cook` is the command you type — the ripgrep/`rg` split.
+
 ```sh
 bin/cook "an extension that makes all websites pink"
 ```
@@ -63,8 +65,9 @@ only — everything below it is the same engine you can drive by hand.
 No API key, no LLM, no config — just `make` and `jq`:
 
 ```sh
-git clone <this repo> && cd agentmake
+git clone https://github.com/qwadratic/agentmake && cd agentmake
 make demo-mock   # full pipeline on a deterministic mock agent, ~1s
+ln -s "$PWD/bin/cook" ~/.local/bin/cook   # optional: the `cook` binary on PATH
 ```
 
 That runs the *entire real engine* — classify → plan → parallel builds →

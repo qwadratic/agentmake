@@ -26,6 +26,8 @@ exactly where it stopped.
      That include path assumes the dir lives at `demos/<name>/` inside the agentmake
      repo. Outside the repo: copy or symlink `engine/` next to the project and use
      `include engine/build.mk`.
+     Shortcut: `bin/cook "goal text"` (the repo's one-shot CLI) does steps 2–3 for
+     you — scaffolds goal.md + Makefile and runs the pipeline.
 3. **Run**: `make -C <dir> -j4 all`.
    In demo mode (the agentmake pi extension) built-in tools are disabled — use the
    `agentmake_demo` tool instead; demos there are pre-scaffolded.
