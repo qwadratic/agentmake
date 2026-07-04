@@ -4,6 +4,7 @@ title: Claude-runtime e2e verification
 status: To Do
 assignee: []
 created_date: '2026-07-03 20:28'
+updated_date: '2026-07-04 01:50'
 labels: []
 dependencies: []
 ordinal: 15000
@@ -21,3 +22,9 @@ ENGINE_CLI=claude plumbing exists (flag mapping, stdin quirk handled, system-pro
 - [ ] #2 wfcheck score recorded in evals/matrix-results.md or a runtime note
 - [ ] #3 Any ENGINE_CLI=claude flag/stdin fixes committed with a mock-agent smoke test
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+E2E matrix run 2026-07-04 (evals/runtime-matrix.md): claude CLI installed but UNAUTHED on this host — 'claude -p' probe returns 401 Invalid authentication credentials, no ~/.claude/.credentials.json, no ANTHROPIC_API_KEY/AUTH_TOKEN env. Adapter plumbing reaches auth boundary as designed; e2e still blocked environmentally. codex also blocked (workspace out of credits). pi baseline on same fixed goal: wfcheck 16/16 score 1, 140s, 0 retries, review PASS. Task stays open until a claude-authed host runs it.
+<!-- SECTION:NOTES:END -->
