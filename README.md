@@ -30,8 +30,9 @@ No Makefile authoring, no goal file editing — say the thing, get software.
 `create-mvp` slugs your sentence into a project dir under cwd, writes `goal.md`
 verbatim, drops the 3-line Makefile, and runs the full pipeline with a live
 progress bar; it exits with the artifact paths and the run's
-[wfcheck](evals/wfcheck) score. No API key? `bin/create-mvp --runtime mock "..."`
-is the same one-shot on the deterministic mock agent.
+[wfcheck](evals/wfcheck) score. Got `claude` on PATH? It just works — that's
+the default runtime; any other agent CLI is one env var away
+([Runtime](#runtime)).
 
 ```
  ✓ classify   tier=vague
@@ -47,7 +48,7 @@ is the same one-shot on the deterministic mock agent.
 |---|---|
 | `--dry` | classify + plan only — prints the component tree and the cost posture (2 agent calls, zero builds) |
 | `--tier vague\|standard\|prd` | override the classifier — the budget dial, by hand |
-| `--runtime cli\|sdk\|mock` | agent harness; `mock` runs the whole pipeline with zero LLM calls |
+| `--runtime cli\|sdk\|mock` | agent harness; `mock` = engine-dev stub, full pipeline, zero LLM calls |
 | `--board` | don't build now — file the goal as a Backlog.md task (`make board-task` later) |
 | `--resume <dir>` | continue a stopped or failed run exactly where it left off (plain `make` resume) |
 | `--dir`, `--jobs` | project dir override; `-j` fan-out (default 2) |
@@ -62,24 +63,20 @@ only — everything below it is the same engine you can drive by hand.
 
 ## 60-second quickstart
 
-No API key, no LLM, no config — just `make` and `jq`:
+Got [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed?
+Then setup is the clone:
 
 ```sh
 git clone https://github.com/qwadratic/create-mvp && cd create-mvp
-make demo-mock   # full pipeline on a deterministic mock agent, ~1s
 ln -s "$PWD/bin/create-mvp" ~/.local/bin/create-mvp   # optional: the `create-mvp` binary on PATH
+bin/create-mvp "a pomodoro timer, keyboard only"
 ```
 
-That runs the *entire real engine* — classify → plan → parallel builds →
-review gate, including one composite component recursing into its own nested
-subtree — with [a 60-line bash stub](engine/fixtures/mock-agent) standing in
-for the LLM. It ends with the progress census, the mermaid dependency graph
-(nested subgraph included), and a `wfcheck` grade of the finished run
-(17/17). What you *don't* see is agents thinking; everything else — the DAG,
-the gates, the resume semantics — is exactly what the real runs below use.
+The default runtime shells out to `claude -p` — the coding agent you already
+have *is* the harness. Prefer another one? `ENGINE_CLI=pi` (or `codex`,
+`gemini`, `opencode`, or any CLI via `custom`) — see [Runtime](#runtime).
 
-Got the `pi` (or `claude`) CLI on PATH with an API key? Same engine, real
-agents:
+The committed demos rebuild the same way:
 
 ```sh
 make demo        # wipes + rebuilds demos/game-of-life from its 33-byte goal
@@ -88,6 +85,17 @@ make demo        # wipes + rebuilds demos/game-of-life from its 33-byte goal
 Real agents, real gates, ends with the artifact census and the dependency
 graph. Pick a bigger one with `make demo DEMO=twitter-x`. The gif above *is*
 that run.
+
+Hacking on the *engine* rather than building something? `make demo-mock` runs
+the entire pipeline — classify → plan → parallel builds → review gate,
+including one composite component recursing into its own nested subtree —
+with [a 60-line bash stub](engine/fixtures/mock-agent) standing in for the
+LLM: ~1s, zero tokens burned. It ends with the progress census, the mermaid
+dependency graph (nested subgraph included), and a `wfcheck` grade of the
+finished run (17/17). What you *don't* see is agents thinking; everything
+else — the DAG, the gates, the resume semantics — is exactly what real runs
+use. `bin/create-mvp --runtime mock "..."` is the same stub behind the
+one-shot CLI.
 
 Your own project is a folder with two files — `create-mvp` writes both for you,
 or by hand:
@@ -257,17 +265,19 @@ ENGINE_CLI_FLAGS="--model x" make    # passthrough flags
 MODEL_SMALL=... MODEL_LARGE=... make # what the classifier's model hints resolve to
 ```
 
-| ENGINE_CLI | invocation | system-prompt mechanism |
-|---|---|---|
-| `claude` (default) | `claude -p`, prompt on stdin | `--append-system-prompt` |
-| `pi` | `pi -p "<prompt>"` | `--append-system-prompt <file>` |
-| `codex` | `codex exec`, prompt on stdin, final msg via `-o` | none — system.md prepended to prompt |
-| `gemini` | piped stdin = non-interactive | `GEMINI_SYSTEM_MD` replaces (not appends) — prepend instead |
-| `opencode` | `opencode run "<prompt>"` | none — prepend |
-| `custom` | `ENGINE_CLI_CUSTOM` template, `{prompt}` = one argv slot (never shell-interpolated) or stdin | prepend |
+| ENGINE_CLI | invocation | system-prompt mechanism | tested here |
+|---|---|---|---|
+| `claude` (default) | `claude -p`, prompt on stdin | `--append-system-prompt` | flags verified vs `--help`; e2e blocked on creds (TASK-16 on the board) |
+| `pi` | `pi -p "<prompt>"` | `--append-system-prompt <file>` | **e2e**: full build, wfcheck 16/16 |
+| `codex` | `codex exec`, prompt on stdin, final msg via `-o` | none — system.md prepended to prompt | flags verified vs `exec --help`; e2e blocked (credits) |
+| `gemini` | piped stdin = non-interactive | `GEMINI_SYSTEM_MD` replaces (not appends) — prepend instead | **UNVERIFIED-LOCALLY** (web docs; not installed) |
+| `opencode` | `opencode run "<prompt>"` | none — prepend | **UNVERIFIED-LOCALLY** (web docs; not installed) |
+| `custom` | `ENGINE_CLI_CUSTOM` template, `{prompt}` = one argv slot (never shell-interpolated) or stdin | prepend | argv golden-checked, both stdin + `{prompt}` modes |
 
-Dry-render any preset without an agent call: `engine/agent argv yes PROMPT`
-(golden-checked by `engine/selfcheck-argv.sh`).
+Per-agent e2e runs (same goal, fresh dir each):
+[evals/runtime-matrix.md](evals/runtime-matrix.md). Dry-render any preset
+without an agent call: `engine/agent argv yes PROMPT` (golden-checked by
+`engine/selfcheck-argv.sh`).
 
 Per-unit overrides (route one hard component to a big model without upgrading
 the whole run) go in `build/effort.json` — see the header of `engine/agent`.

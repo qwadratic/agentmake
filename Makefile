@@ -3,14 +3,14 @@
 DEMO ?= game-of-life
 
 .PHONY: demo demo-mock demo-resume
-demo-mock:  ## full pipeline on the deterministic mock agent — zero API keys, zero LLM calls
+demo-mock:  ## engine-dev mode: full pipeline on the deterministic stub agent, zero LLM calls
 	$(MAKE) -C demos/mock clean
 	$(MAKE) -C demos/mock -j2 all
 	$(MAKE) -C demos/mock progress
 	$(MAKE) -C demos/mock graph
 	evals/wfcheck demos/mock
 
-demo:  ## fresh engine run of demos/$(DEMO) — needs pi (or claude) CLI + API key
+demo:  ## fresh engine run of demos/$(DEMO) — needs an agent CLI on PATH (default: claude)
 	$(MAKE) -C demos/$(DEMO) clean
 	$(MAKE) -C demos/$(DEMO) -j2 all
 	$(MAKE) -C demos/$(DEMO) progress

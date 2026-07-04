@@ -1,8 +1,10 @@
 # STATE — repo snapshot for the iterate-until-viral loop
 
-Last updated: 2026-07-04 @ create-mvp rename converged (repo + CLI,
-cold-verified 9/10; earlier: demoscene synthesis, judge rounds closed,
-follow-ups TASK-21/22; nested round: TASK-17/18/19).
+Last updated: 2026-07-04 @ runtime-preset round converged (claude = default
+ENGINE_CLI, 4 new presets + custom, runtime matrix recorded, docs swept to
+lead with the installed-agent path; earlier: create-mvp rename cold-verified
+9/10, demoscene synthesis, judge rounds closed, follow-ups TASK-21/22;
+nested round: TASK-17/18/19).
 Working tree clean, all selftests re-run green at write time
 (`wfcheck-selftest` 28/28 incl. nested breaks, `nested-selftest` full matrix
 incl. id-gate negatives, `apieval-selftest` incl. TOON round-trip,
@@ -46,7 +48,7 @@ record) are intentional and marked stale.
 | Nested decomposition | [`docs/rfc-nested.md`](rfc-nested.md): composite components → [`engine/subtree`](../engine/subtree) scaffold + recursive `$(MAKE) -C`; deterministic bounds (MAXDEPTH 3, MAXTIER clamp, MAXFANOUT 8) + id/dep charset allowlist (ids splice into make+shell — trust boundary) in jq/make; progress/graph/wfcheck recurse, flat runs byte-identical | mock-first zero-LLM e2e (`engine/fixtures/nested-selftest.sh`) + live real-PRD run (site-forge) |
 | Board integration | [`engine/board.mk`](../engine/board.mk): Backlog.md = default work queue; `board` / `board-next` / `board-task`; failed gate leaves task In Progress | verified e2e — TASK-14 pulled → Done via CLI |
 | Self-host proof | [`docs/self-host-run/`](self-host-run/) — engine built itself from the board, 7 components, wfcheck 32/32 | committed run artifacts |
-| Agent adapter | [`engine/agent`](../engine/agent): roles plan/build/review; `RUNTIME=cli\|sdk`, `ENGINE_CLI=claude(default)\|pi\|codex\|gemini\|opencode\|custom`, `ENGINE_CLI_FLAGS` passthrough; per-unit `effort.json` model routing; argv golden (`engine/selfcheck-argv.sh`) | pi-cli + sdk live-verified; claude reaches auth boundary only (TASK-16); codex flags verified vs local `--help`; gemini/opencode UNVERIFIED-LOCALLY |
+| Agent adapter | [`engine/agent`](../engine/agent): roles plan/build/review; `RUNTIME=cli\|sdk`, `ENGINE_CLI=claude(default)\|pi\|codex\|gemini\|opencode\|custom`, `ENGINE_CLI_FLAGS` passthrough; per-unit `effort.json` model routing; argv golden (`engine/selfcheck-argv.sh`, 12/12); per-agent e2e status: [`evals/runtime-matrix.md`](../evals/runtime-matrix.md) | pi e2e-proven (full build, wfcheck 16/16, 0 retries) + sdk live-verified; claude reaches auth boundary only (TASK-16); codex flags verified vs local `--help`, e2e blocked (credits); gemini/opencode UNVERIFIED-LOCALLY |
 | Style injection | [`engine/prompts/system.md`](../engine/prompts/system.md) (caveman+ponytail) injected at the single `run()` chokepoint, both runtimes | judge-verified, no bypass path |
 | Evals | [`evals/`](../evals/): `snap` (~0.2s/shot), `evalshot` (SSIM golden), `apieval` (jq+TOON golden), `wfcheck` (whole-run grade), `matrix` (multi-model); TUI tmux-golden recipe | selftests green; apieval wired live in twitter-x `run.sh --check` |
 | Effort tiers | classify gate: vague/standard/prd → fan-out, review depth, model hint, thinking | [`docs/effort-and-hitl.md`](effort-and-hitl.md) |
@@ -175,7 +177,11 @@ found committed sidecar was spec-§5 shape while `mk-timeline.py` requires
    datapoint (site-forge). → TASK-19
 4. **Tool-less planner roleplay** — hallucinated tool-call transcripts before JSON (observed on self-host, gate rejected twice, retries cost money). → TASK-15
 5. **Self-seeded goldens** — evalshot/apieval bootstrap golden from current output (loud NOTE, human must eyeball). twitter-x ssim=1.0 golden is self-bootstrapped; independent `checkpixels` asserts keep it honest. → TASK-4
-6. **claude runtime unverified e2e** — plumbing complete, blocked on creds (environmental). → TASK-16
+6. **claude runtime unverified e2e** — plumbing complete (argv golden green),
+   blocked on creds (environmental; probe evidence in
+   [`evals/runtime-matrix.md`](../evals/runtime-matrix.md)). Notable: the
+   *default* runtime is the one unproven e2e on this host — pi is the only
+   e2e-proven path here. → TASK-16
 7. **Nondeterministic plans** — gates hold, but `build/` not bit-reproducible; matrix numbers single-run.
 8. **snap boots a browser per shot** (~190 ms) — CDP-pool upgrade specced in [BENCH.md](../evals/docs/BENCH.md), not built. → TASK-6
 9. **Cost** — small-CLI matrix goal $0.27–$1.97/run; PRD tier = 7+ sessions. → TASK-12
@@ -190,7 +196,7 @@ found committed sidecar was spec-§5 shape while `mk-timeline.py` requires
 Queue is the board (`make board`); every hook is `make board-next`-able.
 Suggested pull order for viral impact:
 
-1. **TASK-13 Viral packaging (clone-and-run)** — the last mile: no-API-key demo path (stub agent / committed artifacts), one-command experience for a stranger. README hook + gifs already exist; this closes clone → wow in <60s.
+1. **TASK-13 Viral packaging (clone-and-run)** — the last mile: one-command experience for a stranger with claude installed (`create-mvp "..."` and walk away); stub agent / committed artifacts as the engine-dev fallback. README now leads with the installed-agent path; this closes clone → wow in <60s.
 2. **TASK-10 Retry-with-feedback** — pipe gate output into the retry agent's prompt. Attacks ceiling #1; directly raises matrix scores (haiku/sonnet died on gates that feedback would fix).
 3. **TASK-2 HITL approvals default** — flips the documented design live; makes the "approval is a file" demo-able, which is the most tweetable primitive here.
 4. **TASK-17 Mid-flight re-planning** — nested round's top surfaced ceiling;

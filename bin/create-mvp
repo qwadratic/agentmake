@@ -37,7 +37,7 @@ flags:
   --dir DIR       project dir (default: ./<slug-of-goal>)
   --dry           classify + plan only; print component tree + cost posture
   --tier T        override the classifier: vague | standard | prd
-  --runtime R     cli (default) | sdk | mock   (mock = zero LLM calls)
+  --runtime R     cli (default) | sdk | mock   (mock = engine-dev stub, zero LLM calls)
   --board         don't build: file the goal as a Backlog.md task instead
   --jobs N        make -jN fan-out (default 2)
 
