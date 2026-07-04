@@ -355,4 +355,3 @@ per-artifact token accounting, persistent CDP screenshot pool.
 - [Dogfood autopsy](docs/dogfood-autopsy.md) — the mess that made the board the default, tree snapshot verbatim
 - [Self-host run](docs/self-host-run/) — task-14 artifacts + the three-run story
 - [Naming](docs/naming.md) — why `create-mvp` (the `create-react-app` scaffolder lineage), and everything it beat
-- [demoscene/](demoscene/README.md) — the forth-forth evolution session rendered as a graded cut (proxy-attention, honesty-labeled)

@@ -101,41 +101,11 @@ no whole-tree leaf census — composite counts as 1 at parent (→ TASK-18);
 cross-subtree dep edges inexpressible + copy-based sibling integration
 (→ TASK-19, absorbs old ceiling #3).
 
-## Demoscene track ([`demoscene/`](../demoscene/README.md), judge rounds closed)
+## Demoscene track (removed)
 
-Live pi session evolves `demos/forth-forth` **through a single `forth` tool
-only** (persistent stage0 VM, [`demoscene/forth-tool/`](../demoscene/forth-tool/)),
-then the session is rendered as a graded demoscene cut keyed to an
-interpretive proxy-attention timeline.
-
-**Honesty contract (hard):** every attention surface carries the exact string
-`interpretive proxy — not model internals` — weights derive from forth grammar
-structure, token categories, and session recency, never model internals.
-Burned into pixels of every video frame (drawtext, no `enable=` window),
-legend of every terminal frame (color + `--no-color`, no disabling flag),
-top-level `disclaimer` in every sidecar; `mk-timeline.py`/`mk-grade.py`
-assert-reject inputs without it. Judge verdict: **PASS, exemplary** — 11/11
-session frames labeled, all sampled video frames labeled, zero unlabeled
-proxy output found.
-
-| artifact | verification |
-|---|---|
-| `forth-tool/` pi extension — one `forth` tool, persistent VM across calls | `check.mjs` 6/6 incl. eval-error survival |
-| `session.cast` + `session-trace.jsonl` — agent added sierpinski golden test, **11 forth calls, zero other tools, first try** | post-session gate: interpreted==compiled==golden ×4, selfhost ACHIEVED, wfcheck 32/32 |
-| `attn` CLI — proxy renderer, static `view` + per-tool-call `session` frames | `attn-selfcheck.py` golden-text eval + honesty assertions all modes; `attn-proxy-check.py` = executable weight definition |
-| trace → sidecar → timeline → graded cut (`mk-timeline.py`, `mk-grade.py`) | `final-v1/v2.mp4` 95.7s == timeline video_len; v2 junction pulses judge-verified "night-and-day" |
-
-**Judge rounds:** round 1 — 2 CRITICALs (graded render never terminated:
-`-loop 1` framesync repeatlast; magenta wash: YUV `hue` after `format=gbrp`)
-→ both fixed in `dcd05cb` with root-cause writeups, reproduced-and-verified
-live in round 2. Round 2 — honesty PASS everywhere, craft lands (junction
-pulses, end card), no new criticals.
-
-**Follow-ups filed:** TASK-21 (per-category hue rotation barely visible under
-final curves pass), TASK-22 (dual sidecar generators — completeness pass
-found committed sidecar was spec-§5 shape while `mk-timeline.py` requires
-`attn-session.py`'s extended shape; fresh clone would KeyError. Fixed
-`7608409`; generator unification remains).
+Removed from the repo — demos/forth-forth covers the Forth showcase. The
+graded-cut experiment (proxy-attention session replay, forth-only tool) lives
+in git history before this commit; TASK-21/22 dropped with it.
 
 ## Demos (all built by the engine from the committed goal file, unedited)
 

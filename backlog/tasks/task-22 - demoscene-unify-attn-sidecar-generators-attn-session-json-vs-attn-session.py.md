@@ -3,9 +3,10 @@ id: TASK-22
 title: >-
   demoscene: unify attn sidecar generators (attn session --json vs
   attn-session.py)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-04 00:32'
+updated_date: '2026-07-04 03:35'
 labels:
   - demoscene
   - follow-up
@@ -26,3 +27,9 @@ Judge round-2 completeness pass surfaced: two independent weight/tokenizer imple
 - [ ] #3 mk-timeline.py consumes the unified sidecar; attn-selfcheck.py + attn-proxy-check.py still pass
 - [ ] #4 SPEED/agg coupling either derived from one constant or asserted (timeline video_len vs raw.mp4 duration)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+dropped: demoscene removed from repo; sidecar generators gone with it; moot
+<!-- SECTION:NOTES:END -->

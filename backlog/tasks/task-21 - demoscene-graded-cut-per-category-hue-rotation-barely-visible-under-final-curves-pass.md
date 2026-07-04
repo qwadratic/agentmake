@@ -3,9 +3,10 @@ id: TASK-21
 title: >-
   demoscene graded cut: per-category hue rotation barely visible under final
   curves pass
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-04 00:10'
+updated_date: '2026-07-04 03:35'
 labels: []
 dependencies: []
 ordinal: 20000
@@ -23,3 +24,9 @@ Judge-loop round 1 out-of-scope observation (non-CRITICAL, aesthetic). mk-grade.
 - [ ] #2 probe render still self-terminates and full final-v1/v2 render 95.7s
 - [ ] #3 honesty disclaimer still on every frame (spot-check 3 timestamps)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+dropped: demoscene removed from repo (demos/forth-forth covers forth showcase); moot
+<!-- SECTION:NOTES:END -->
