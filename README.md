@@ -227,6 +227,7 @@ its approval is stale by timestamp — the gate re-opens itself. No daemon, no
 state, survives restarts:
 
 ```sh
+# design — pattern rules live in docs/effort-and-hitl.md, not yet wired into engine/build.mk
 make AUTOPILOT=1                # approver agent gates every step (must print APPROVE)
 make -k                         # default: human gates; -k lets siblings keep building
 make pending                    # list open gates
