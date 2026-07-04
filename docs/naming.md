@@ -1,11 +1,29 @@
 # Naming decision
 
+**WINNER=create-mvp POSTURE=RENAME-NOW** — repo AND CLI binary are `create-mvp`.
+
+## USER OVERRIDE 2026-07-04
+
+Operator decision — **create-mvp**, supersedes cook/HYBRID adjudication below.
+Running naming-wf agents + judges: **enforce create-mvp everywhere**, treat
+`cook` references as stale. Rationale: `create-*` scaffolder lineage
+(create-react-app convention) for both repo and CLI. This override is final
+and not subject to re-adjudication.
+
+- Repo: `qwadratic/agentmake` → `qwadratic/create-mvp`
+- CLI binary: `cook` → `create-mvp`
+- npm/package surfaces: `create-mvp` (publish not in scope of this override)
+
+---
+
+## Superseded adjudication (history — do not enforce)
+
 **WINNER=cook POSTURE=HYBRID** — repo stays `qwadratic/agentmake`, CLI binary is `cook`.
 Runner-up: **makex**.
 
 Adjudicated 2026-07-04. Weighting applied: gh+npm collision (hard filter) > verb-ability in one-shot API > SEO > lineage.
 
-## Verdict rationale
+### Verdict rationale
 
 The product IS the sentence: `cook "an extension that makes all websites pink"`.
 Verb-ability is the second-highest weight and `cook` wins it outright — grammatical
@@ -32,7 +50,7 @@ Posture consequences:
 - Bare-"cook" SEO hell (101k★ recipe repos, cookbook-suffixed LLM repos) is routed around: nobody searches bare "cook", they search the repo/package name.
 - npm squat becomes irrelevant; optional later: npm dispute for the placeholder if the brand hardens.
 
-## Runner-up: makex
+### Runner-up: makex
 
 Only candidate fully clean on the hard filter (gh FREE, npm FREE, brew FREE, crates FREE).
 Perfect lineage signal ("agentic successor to Make"), perfectly searchable. Loses on the
@@ -41,7 +59,7 @@ second weight: verb-dead — "makex me an app" clunks, pronunciation forks (make
 meta.company — direct semantic collision on one registry. Keep as fallback binary name
 if `cook` develops a real PATH conflict.
 
-## Rejected — one-liners
+### Rejected — one-liners
 
 - **forge** — Foundry ships a binary literally named `forge` on dev machines (this one included); collision apocalypse. Fatal.
 - **brew** — Homebrew. Fatal for macOS dev audience.
