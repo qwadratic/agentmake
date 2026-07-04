@@ -377,7 +377,7 @@ Output: parent bar, then indented child bars recursively. The
 unplanned subtree has no leaf count yet, so no bar can truthfully include it.
 ponytail: NO global percent rollup — a single merged number across levels of
 unequal-cost components would lie; per-level bars are honest. Upgrade path:
-emit progress.json per level, aggregate with jq (dogfood-progress-json
+emit progress.json per level, aggregate with jq (docs/dogfood/progress-json
 groundwork).
 
 ### 9b. graph — mermaid subgraphs

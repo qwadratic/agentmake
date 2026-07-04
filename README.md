@@ -247,12 +247,27 @@ The agent adapter ([`engine/agent`](engine/agent)) is ~150 lines of bash; the
 harness is pluggable:
 
 ```sh
-make                           # RUNTIME=cli, ENGINE_CLI=pi (default)
-make ENGINE_CLI=claude         # claude CLI; thinking levels map to --effort
+make                           # RUNTIME=cli, ENGINE_CLI=claude (default)
+make ENGINE_CLI=pi             # pi CLI; native --append-system-prompt
+make ENGINE_CLI=codex          # codex exec (system.md prepended to prompt)
+make ENGINE_CLI=gemini         # gemini / opencode presets (unverified locally)
+ENGINE_CLI=custom ENGINE_CLI_CUSTOM='mycli --oneshot {prompt}' make  # any CLI
 make RUNTIME=sdk               # in-process pi SDK (engine/runtime-sdk.mjs)
 ENGINE_CLI_FLAGS="--model x" make    # passthrough flags
 MODEL_SMALL=... MODEL_LARGE=... make # what the classifier's model hints resolve to
 ```
+
+| ENGINE_CLI | invocation | system-prompt mechanism |
+|---|---|---|
+| `claude` (default) | `claude -p`, prompt on stdin | `--append-system-prompt` |
+| `pi` | `pi -p "<prompt>"` | `--append-system-prompt <file>` |
+| `codex` | `codex exec`, prompt on stdin, final msg via `-o` | none — system.md prepended to prompt |
+| `gemini` | piped stdin = non-interactive | `GEMINI_SYSTEM_MD` replaces (not appends) — prepend instead |
+| `opencode` | `opencode run "<prompt>"` | none — prepend |
+| `custom` | `ENGINE_CLI_CUSTOM` template, `{prompt}` = one argv slot (never shell-interpolated) or stdin | prepend |
+
+Dry-render any preset without an agent call: `engine/agent argv yes PROMPT`
+(golden-checked by `engine/selfcheck-argv.sh`).
 
 Per-unit overrides (route one hard component to a big model without upgrading
 the whole run) go in `build/effort.json` — see the header of `engine/agent`.
@@ -268,7 +283,7 @@ format and built a gate-passing pipeline against their own fixtures. The
 other run left a stray `report.md` at the wrong level and reached outside its
 run dir. Root of the repo: two clutter directories, two orphan
 `effort.json`, zero improvements landed. The full mess is committed verbatim
-(`dogfood-board-next/`, `dogfood-progress-json/`) and dissected in
+(now under [`docs/dogfood/`](docs/dogfood/)) and dissected in
 [docs/dogfood-autopsy.md](docs/dogfood-autopsy.md).
 
 The lesson: gates measure internal consistency, not integration — and ad-hoc
@@ -297,7 +312,7 @@ makefile, census, mermaid graph, e2e check), built dep-ordered under `-j2`,
 and passed full review — the produced engine runs a goal end-to-end with a
 deterministic stub agent, no LLM in the checks.
 [wfcheck](evals/wfcheck): 32/32, score 1.0. Run artifacts:
-[`board/TASK-14/`](board/TASK-14/). It took three runs — the first two died
+[`docs/self-host-run/`](docs/self-host-run/). It took three runs — the first two died
 at the plan gate when the planner hallucinated tool calls instead of JSON
 (`.DELETE_ON_ERROR` cleaned up, the task stayed In Progress, rerun resumed);
 the fix and the follow-up hardening task are on the board.
