@@ -1,5 +1,5 @@
-// agentmake demo-mode extension.
-// (a) disables all built-in tools, (b) exposes a single `agentmake_demo` tool
+// create-mvp demo-mode extension.
+// (a) disables all built-in tools, (b) exposes a single `create_mvp_demo` tool
 // that drives the engine via `make -C <dir>` with progress streaming,
 // (c) bundles the `agentic-makefile` skill so plain pi sessions auto-drive
 // the goal.md -> plan -> components -> review pipeline.
@@ -17,7 +17,7 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 
 const baseDir = dirname(fileURLToPath(import.meta.url));
-const TOOL = "agentmake_demo";
+const TOOL = "create_mvp_demo";
 const TARGETS = ["all", "progress", "graph", "clean"] as const;
 
 function tail(text: string, lines: number): string {
@@ -69,16 +69,16 @@ export default function (pi: ExtensionAPI) {
 	// (b) single tool driving the engine
 	pi.registerTool({
 		name: TOOL,
-		label: "agentmake",
+		label: "create-mvp",
 		description:
-			"Drive the agentmake engine in a demo directory (must contain a Makefile that " +
+			"Drive the create-mvp engine in a demo directory (must contain a Makefile that " +
 			"includes engine/build.mk plus a goal.md). Targets: 'all' runs the full pipeline " +
 			"(plan -> components -> review) and appends a progress census; 'progress' prints " +
 			"the artifact census; 'graph' emits a mermaid dependency graph; 'clean' wipes " +
 			"build/ and src/. Output is truncated to the last 50KB/2000 lines.",
-		promptSnippet: "Run the agentmake engine (make) in a demo directory with streamed progress",
+		promptSnippet: "Run the create-mvp engine (make) in a demo directory with streamed progress",
 		promptGuidelines: [
-			`Use ${TOOL} to build, inspect, or clean an agentmake demo instead of raw shell commands.`,
+			`Use ${TOOL} to build, inspect, or clean a create-mvp demo instead of raw shell commands.`,
 			`After ${TOOL} finishes target 'all', report the reviewer verdict from the output; do not re-review by hand.`,
 		],
 		parameters: Type.Object({
@@ -130,7 +130,7 @@ export default function (pi: ExtensionAPI) {
 
 	// convenience: /demo <dir> [target] hands the run to the agent via the tool
 	pi.registerCommand("demo", {
-		description: "Drive the agentmake engine: /demo <dir> [all|progress|graph|clean]",
+		description: "Drive the create-mvp engine: /demo <dir> [all|progress|graph|clean]",
 		handler: async (args, ctx) => {
 			const [dir, target] = (args ?? "").trim().split(/\s+/).filter(Boolean);
 			if (!dir) {

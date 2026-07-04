@@ -1,6 +1,6 @@
 ---
 name: agentic-makefile
-description: Turn a buildable software goal into a running agentmake pipeline. Use when the user states a goal that decomposes into components ("build me a twitter clone", "make a todo API + web UI"). Scaffold goal.md plus a 3-line Makefile that includes engine/build.mk, then run make to plan, build, and review with dep-ordered parallel agents.
+description: Turn a buildable software goal into a running create-mvp pipeline. Use when the user states a goal that decomposes into components ("build me a twitter clone", "make a todo API + web UI"). Scaffold goal.md plus a 3-line Makefile that includes engine/build.mk, then run make to plan, build, and review with dep-ordered parallel agents.
 ---
 
 # agentic-makefile
@@ -23,14 +23,14 @@ exactly where it stopped.
      GOAL ?= goal.md
      include ../../engine/build.mk
      ```
-     That include path assumes the dir lives at `demos/<name>/` inside the agentmake
+     That include path assumes the dir lives at `demos/<name>/` inside the create-mvp
      repo. Outside the repo: copy or symlink `engine/` next to the project and use
      `include engine/build.mk`.
-     Shortcut: `bin/cook "goal text"` (the repo's one-shot CLI) does steps 2–3 for
+     Shortcut: `bin/create-mvp "goal text"` (the repo's one-shot CLI) does steps 2–3 for
      you — scaffolds goal.md + Makefile and runs the pipeline.
 3. **Run**: `make -C <dir> -j4 all`.
-   In demo mode (the agentmake pi extension) built-in tools are disabled — use the
-   `agentmake_demo` tool instead; demos there are pre-scaffolded.
+   In demo mode (the create-mvp pi extension) built-in tools are disabled — use the
+   `create_mvp_demo` tool instead; demos there are pre-scaffolded.
 4. **Monitor**: `make -C <dir> progress` (artifact census with bar),
    `make -C <dir> graph` (mermaid dependency graph).
 5. **Verify**: gates already enforce plan validity (`jq -e` on `plan.json`),
